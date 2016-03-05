@@ -56,5 +56,5 @@ typedef struct {
 #define JV3_FREE        0xFF  /* in track and sector fields of free sectors */
 #define JV3_FREEF       0xFC  /* in flags field, or'd with size code */
 
-
+#define JV3_WPFLAG_OFF  0xFF
 

@@ -11,6 +11,11 @@ usage: -f <image file>
                          0 - ERROR; 1 - WARN; 2 - INFO; 3 - DEBUG; 4 - TRACE; 5 - BYTES 5
        -?              - help and version
 
+New in 0.6:
+- cleaned up code
+- replaced raw hex dumps by neat hex & ascii
+- structured the check code and extracted the boot sector check
+
 New in 0.5:
 - slightly improved help.
 - replaced fixed DAM location by a dynamic search
