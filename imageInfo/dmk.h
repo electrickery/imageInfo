@@ -141,6 +141,7 @@ typedef struct {
 // masks for DMK_SectorDescriptor_t->flags
 #define DMK_SECTOR_SIZE_MASK  0x03 // bits 0 and 1
 #define DMK_DATA_DOUBLER_MASK 0x04 // bit 2
+#define DMK_DOUBLE_DENSITY    0x08 // bit 3
 
 #define DMK_II_128  0x00
 #define DMK_II_256  0x01
