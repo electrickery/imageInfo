@@ -43,21 +43,29 @@ int getImageSize(userParameters_t* tuserParameters);
 
 int jv1Check(userParameters_t *tuserParameters);
 int jv1DirTrack(userParameters_t *tuserParameters);
-int getJV1Sector(unsigned char *data, char track, char sector, char side, userParameters_t *tuserParameters);
+int jv1GetSector(unsigned char *data, char track, char sector, char side, userParameters_t *tuserParameters);
 
 int jv3Check(userParameters_t *tuserParameters, JV3SectorHeader_t *jv3Headers1, long *jv3SectorIndices);
-int getJV3Sector(unsigned char *data, char track, char sector, char side, userParameters_t *tuserParameters, JV3SectorHeader_t *jv3Headers1, long *jv3SectorIndices);
+int jv3GetSector(unsigned char *data, char track, char sector, char side, userParameters_t *tuserParameters, JV3SectorHeader_t *jv3Headers1, long *jv3SectorIndices);
 void jv3Flags(unsigned char flags);
-void initJV3Structs(long *jv3SectorIndices, JV3SectorHeader_t *jv3Headers1);
+void jv3InitStructs(long *jv3SectorIndices, JV3SectorHeader_t *jv3Headers1);
 
 int dmkCheck(userParameters_t *tuserParameters, DMK_SectorDescriptor_t *dmkImageIndex);
-int getDMKSector(unsigned char *data, char track, char sector, char side, userParameters_t *tuserParameters);
-void getRawDMKSector(unsigned char *data, int size, unsigned long location, userParameters_t *tuserParameters);
-void getBootSectorSignature(unsigned char *data, int *dmkSectorIndex, unsigned char *bootSectorSignature);
-void logDMKData(unsigned char *data, int *dmkDD256, DMK_SectorDescriptor_t *dmkSectorDescriptor, int doubleDensity);
+int dmkGetSector(unsigned char *data, char track, char sector, char side, userParameters_t *tuserParameters);
+void dmkShowSector(DMK_SectorDescriptor_t *tSectorParams, 
+        DMK_SectorDescriptor_t *dmkImageIndex, userParameters_t *tuserParameters);
+void dmkFindSectorLocation(DMK_SectorDescriptor_t *tSectorParams, DMK_SectorDescriptor_t *dmkImageIndex);
+void dmkGetBootSectorSignature(unsigned char *data, int *dmkSectorIndex, unsigned char *bootSectorSignature);
+int dmkGetCRCErrorScore(unsigned char *singledSectorData, int *dmkSectorIndex, int doubleDensity);
+void dmkIndexSectorData(unsigned char *data, int *dmkDD256, DMK_SectorDescriptor_t *dmkSectorDescriptor);
+unsigned short dmkFindDAM(unsigned char *data, int size, int doubleDensity, int startOffset);
+unsigned short findOneOfThem(unsigned char *data, int dataSize, int startOffset, unsigned char *validValues, int validValuesSize);
 
 int checkCRC(unsigned char *data, int size, unsigned short crc, int doubleDensity);
 
-void unDoubler(unsigned char *doubledData, unsigned char *singledData, int size, int interval);
+void dmkUnDoubler(unsigned char *doubledData, unsigned char *singledData, int size, int interval);
 
 unsigned short calc_crc(unsigned short crc, unsigned char byte);
+
+//int readFromImage(unsigned char *data, long location, int size, userParameters_t *tuserParameters);
+int readFromImage(void *data, long location, int size, userParameters_t *tuserParameters);

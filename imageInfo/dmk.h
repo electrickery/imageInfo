@@ -66,10 +66,14 @@ typedef struct {
 
 // Source: FD 179X-01 Floppy Disk Formatter/Controller Family
 
-//                 0  1  2  3  4   5   6  7   8   9    10 
-//                ID Tr Sd Sc EN IcM  IcL DM  Dat DcM  DcL
-int dmkSD256[] = {0, 1, 2, 3, 4,  5,  6, 24, 25, 281, 282};
-int dmkDD256[] = {0, 1, 2, 3, 4,  5,  6, 44, 45, 301, 302};
+//                    0  1  2  3  4   5   6  7   8   9    10 
+//                   ID Tr Sd Sc EN IcM  IcL DM  Dat DcM  DcL
+int dmkSD256[]     = {0, 1, 2, 3, 4,  5,  6, 24, 25, 281, 282};
+int dmkDD256[]     = {0, 1, 2, 3, 4,  5,  6, 44, 45, 301, 302};
+int dmkRawSector[] = {0, 1, 2, 3, 4,  5,  6,  0,  0,   0,   0}; // DM  Dat DcM  DcL values are not quite fixed
+#define DMK_DAM_DATA       1
+#define DMK_DAM_DcM_OFFSET 1
+#define DMK_DAM_DcL_OFFSET 2
 
 #define DMK_RAW_SECTOR_INDEX_ID  0
 #define DMK_RAW_SECTOR_INDEX_TR  1
@@ -86,6 +90,10 @@ int dmkDD256[] = {0, 1, 2, 3, 4,  5,  6, 44, 45, 301, 302};
 #define DMK_IDAM_CRC_RANGE 5
 #define DMK_DAM_CRC_RANGE_OVERHEAD 1
 
+#define VALID_FM_IDAM_LIST_SIZE  4
+#define VALID_MFM_IDAM_LIST_SIZE 2
+unsigned char valid_FM_DAMs[] = {0xF8, 0xF9, 0xFA, 0xFB}; // FB is standard, FA is Model I dir sectors
+unsigned char valid_MFM_DAMs[] = {0xF8, 0xFB};
 
 typedef struct {
     unsigned char IDAM; // 0xFE
@@ -130,6 +138,7 @@ typedef struct {
 
 #define DMK_II_SECTORMAX 64*80
 
+// masks for DMK_SectorDescriptor_t->flags
 #define DMK_SECTOR_SIZE_MASK  0x03 // bits 0 and 1
 #define DMK_DATA_DOUBLER_MASK 0x04 // bit 2
 
