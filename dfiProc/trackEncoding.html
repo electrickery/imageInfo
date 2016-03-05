@@ -18,31 +18,34 @@ IBM 3740 FORMAT
 Track
         Index  Sector 
         Mark 
-40x  6x                247x
+40x  6x         26x    247x
 FF   00  FC     ..     FF
 
 Sector
-              0      1      2       3    4 5
-         IDAM Track  Side   Sector  ENC  IDAM           DAM   Data Data
-              Number Number Number       CRC                       CRC
-26x  6x                                   2x    11x  6x             2x
-FF   00  FE   tn     sin    sen     00   icrc   FF   00  FB   ..   crc   
+ibyte:        0      1      2       3    4 5
+         IDAM Track  Side   Sector  ENC  IDAM           DAM   Data  Data
+              Number Number Number       CRC                        CRC
+26x  6x                                   2x    11x  6x       128x  2x
+FF   00  FE   tn     sin    sen     00   icrc   FF   00  FB   ..    crc   
 
+(1) 128, 256, 512, 1024
 
 IBM SYSTEM 34 FORMAT
 
 Track
             Index  Sector
             Mark
-80x 12x 3x                 598x
+80x 12x 3x          26x    598x
 4E  00  F6  FC      ..     4E
 
 Sector
-               0      1      2      3    4 5
-         IDAM  Track  Side   Sector ENC  IDAM               DAM  Data Data
-               Number Number Number      CRC                          CRC
-12x  3x                                  2x    22x 12x  3x            2x   54x
-00   F5  FE    tn     sin    sen    01   F7    4E  00   F5  FB   ..   crc  4E
+ibyte:         0      1      2      3    4 5
+         IDAM  Track  Side   Sector ENC  IDAM               DAM  Data  Data
+               Number Number Number      CRC                           CRC
+12x  3x                                  2x    22x 12x  3x             2x   54x
+00   F5  FE    tn     sin    sen    01   F7    4E  00   F5  FB   256x  crc  4E
+
+(2) 128, 256, 512, 1024
         </pre>
     </body>
 </html>

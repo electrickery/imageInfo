@@ -1,5 +1,5 @@
 /* 
- * File:   dfiProcess.c
+ * File:   dfiProcess.c version 0.3
  * Author: fjkraan
  * 
  * Based on decoding routines Copyright (C) 2000 Timothy Mann 
@@ -21,7 +21,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
- */
+ 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,10 +40,13 @@
 
 int fd_img; 
 struct trackHeader trackHeader;
-int uencoding;  // user set encoding
+//int uencoding;  // user set encoding
+userParameters_t ups;
+userParameters_t *userParameters = &ups;
 
-int out_level = OUT_QUIET;
-int out_file_level = OUT_QUIET;
+track_t tt;
+track_t *track = &tt;
+
 int dmk_iam_pos = -1;
 int dmk_ignore = 0;
 int cylseen = -1;
@@ -109,6 +112,9 @@ unsigned int processTrackHeader(unsigned int pos) {
     trackHeader.sector    = (data[4] << 8) + data[5];
     trackHeader.trackSize = (data[6] << 24) + (data[7] << 16) + (data[8] << 8) + data[9];
     
+    track->hardwareTrack = trackHeader.track;
+    track->hardwareSide  = trackHeader.head;
+    
     printf("  processTrackHeader; track: %hd, head: %hd, sector: %hd, trackSize: %08X\n", 
             trackHeader.track, 
             trackHeader.head,
@@ -121,6 +127,85 @@ void initHistArray(histoGraph_t *hist) {
     int i;
     for (i = 0; i < hist->histSize; i++) {
         hist->hist[i] = 0;
+    }
+}
+
+void trackSummary(track_t *track) {
+    int i = 0;
+    int j;
+//    int k;
+//    int size;
+    printf("  processTrack; Track summary:\n");
+    printf("                track: %d\n", track->hardwareTrack);
+    printf("                 side: %d\n", track->hardwareSide);
+//    printf("           index mark: %02x\n", track->indexMark);
+    printf("         sector order: ");
+    while (track->sectorOrder[i] != -1 && i < MAXSECTORSIZE) {
+        printf("%d, ", track->sectorOrder[i]);
+        i++;
+    }
+    printf("\n");
+    for (j = 0; j < i; j++) { // i points to the first not used sector
+        printf("  sector %d: enc=%d idam=%02x cyl=%d side=%d sec=%d size=%d icrc=%02x %02x",
+            j, 
+            track->sector[j].encoding,
+            track->sector[j].idam,
+            track->sector[j].track,
+            track->sector[j].head,
+            track->sector[j].sector,
+            track->sector[j].sectorSize,
+            track->sector[j].idam_crc1,
+            track->sector[j].idam_crc2);
+        printf(" dam=%02x crc=%02x %02x\n", 
+            track->sector[j].dam,
+            track->sector[j].data_crc1,
+            track->sector[j].data_crc2);
+/*
+        size = secsize(track->sector[j].sectorSize, track->sector[j].encoding);
+        for (k = 0; k < size; k++) {
+            printf("%02x ", track->sector[j].sectorData[k]);
+        }
+        printf("\n");
+*/
+    }
+}
+
+int findIndex(int *sectorOrder, int value, int max) {
+    int i;
+    for (i = 0; i < max; i++) {
+        if (sectorOrder[i] == value) return i;
+    }
+    return -1;
+}
+
+FILE* openDumpFile(char *fileName) {
+    FILE *file = fopen(fileName, "wb");
+    if (file == NULL) {
+      perror(userParameters->imageFile);
+    }    
+    return file;
+}
+
+void closeDumpFile(FILE *file) {
+    fclose(file);
+}
+
+void jv1Dump(track_t *track, userParameters_t *userParameters) {
+    int i = 0;
+    int j;
+    int size;
+    printf("Dumping to %s\n", userParameters->imageFile);
+    i = 0;
+    while (i < MAXTRACKSECTORS) {
+        j = findIndex(track->sectorOrder, i, MAXTRACKSECTORS);
+        printf("Found sector %d at %d, ", i, j);
+        if (j != -1) {
+            size = secsize(track->sector[j].sectorSize, track->sector[j].encoding);
+            printf("dumping %d bytes", size);
+            fwrite(&track->sector[j].sectorData, size, 1, userParameters->fileHandle);
+        }
+        printf("\n");
+        i++;
     }
 }
 
@@ -177,8 +262,10 @@ unsigned int processTrack(unsigned int pos, int silent) {
         printf("\nValues printed: %d, lowest: %0X, highest: %0X\n", printed, lowest, highest);
 
         printHist(histoGraph, (printed/tresHoldFactor));
-        
         printf("  processTrack; adding trackSize: %08X to pos: %08X\n", trackHeader.trackSize, pos);
+        
+        trackSummary(track);
+        if (userParameters->imageType != -1) jv1Dump(track, userParameters);
     } else {
         printf("  processTrack; skipping track\n");
     }
@@ -209,8 +296,10 @@ void printHist(histoGraph_t *hist, int printedTresHoldFactor) {
 void usage() {
     printf(" usage; -d <dfiImageFile> : (mandatory)\n");
     printf("        -e encoding   1 = FM (SD), 2 = MFM (DD or HD), 3 = RX02\n");
-    printf("        -s : skip odd tracks in image\n");    
-    printf("        -v verbosity  Amount of output [%d]\n", out_level);
+    printf("        -f file name\n");
+    printf("        -s : skip odd tracks in image\n");  
+    printf("        -t file type. Only 1, JV1 is supported\n");
+    printf("        -v verbosity  Amount of output [%d]\n", userParameters->out_level);
     printf("               0 = No output\n");
     printf("               1 = Summary of disk\n");
     printf("               2 = + summary of each track\n");
@@ -222,44 +311,69 @@ void usage() {
     printf("               21 = level 2 to logfile, 1 to screen, etc.\n");
 }
 
-int main(int argc, char** argv) {
-    char ch;
-    char *optstr = "d:e:shv:";
-    int trackCount = 0;
-    int silentTrack;
-    int pos = 4; /* fileHeaderSize */
-    int skipOddTracks = 0;
-    uencoding = FM;
+void scrubTrackBuffer(track_t *track) {
+    int i,j;
+    track->hardwareTrack = -1;
+    track->hardwareSide = -1;
+    track->indexMark = -1;   
+    for (i = 0; i < MAXTRACKSECTORS; i++) {
+        track->sectorOrder[i] = -1;
+        track->sector[i].encoding = -1,
+        track->sector[i].dam = -1;
+        track->sector[i].data_crc1 = -1;
+        track->sector[i].data_crc2 = -1;
+        track->sector[i].head = -1;
+        track->sector[i].idam = -1;
+        track->sector[i].idam_crc1 = -1;
+        track->sector[i].idam_crc2 = -1;
+        track->sector[i].number = -1;
+        track->sector[i].sector = -1;
+        track->sector[i].sectorSize = -1;
+        track->sector[i].track = -1;
+        for (j = 0; j < MAXSECTORSIZE; j++) {
+            track->sector[i].sectorData[j] = 0;
+        }
+    }
+}
 
-    while( -1 != (ch=getopt(argc,argv,optstr))) {
+void optionParse(int argc, char** argv) {
+    char *optstr = "d:e:f:st:hv:";
+    char ch;
+     while( -1 != (ch=getopt(argc,argv,optstr))) {
         switch(ch) {
             case 'd':           
                 openImage(optarg);
                 break;
             case 'e':
-                uencoding = strtol(optarg, NULL, 0);
-                if (uencoding < FM || uencoding > RX02) {
-                    printf("Encoding not valid: %d\n", uencoding);
+                userParameters->uencoding = strtol(optarg, NULL, 0);
+                if (userParameters->uencoding < FM || userParameters->uencoding > RX02) {
+                    printf("Encoding not valid: %d\n", userParameters->uencoding);
                     usage();
                     exit(1);
                 }
                 break;
+            case 'f':
+                userParameters->imageFile = optarg;
+                break;                
             case 'h':
                 usage();
                 exit(1);
                 break;
             case 's':
-                skipOddTracks = 1;
+                userParameters->skipTracks = 1;
+                break;
+            case 't':
+                userParameters->imageType = strtol(optarg, NULL, 0);
                 break;
             case 'v':
-                out_level = strtol(optarg, NULL, 0);
-                if (out_level < OUT_QUIET || out_level > OUT_SAMPLES * 11) {
+                userParameters->out_level = strtol(optarg, NULL, 0);
+                if (userParameters->out_level < OUT_QUIET || userParameters->out_level > OUT_SAMPLES * 11) {
                   usage();
                   exit(1);
                   break;
                 }
-                out_file_level = out_level / 10;
-                out_level = out_level % 10;
+                userParameters->out_file_level = userParameters->out_level / 10;
+                userParameters->out_level = userParameters->out_level % 10;
                 break;
             case '?':
             default:
@@ -268,35 +382,52 @@ int main(int argc, char** argv) {
                 exit(1);
                 break;
         }
-    }
+    }   
+}
+
+int main(int argc, char** argv) {
+   int trackCount = 0;
+    int silentTrack;
+    int pos = 4; /* fileHeaderSize */
+//    int skipOddTracks = 0;
+    userParameters->uencoding = FM;
+    userParameters->skipTracks = 0;
+    userParameters->out_level = 0;
+    userParameters->out_level = OUT_QUIET;
+    userParameters->out_file_level = OUT_QUIET;
+    userParameters->imageType = -1;
+
+    optionParse(argc, argv);
 
     if (!checkImageHeader()) {
         return(EXIT_FAILURE);
     }
-    /* Command-line parameters */
-//int fmtimes = 2; /* record FM bytes twice; see man page */
 
- //    dmk_track = dmk_init(trackHeader.track, DMK_TRACKLEN_5, trackHeader.head, fmtimes);
-    
+    userParameters->fileHandle = openDumpFile(userParameters->imageFile);
+    if (userParameters->fileHandle == 0) {
+        printf("Error opening %s, exiting\n", userParameters->imageFile);
+        exit(1);
+    }
     while(1) {
+        scrubTrackBuffer(track);
         pos = processTrackHeader(pos);
         if (pos == 0) return(EXIT_SUCCESS);
         printf(" main; returned track position: %08X\n", pos);
 
-        silentTrack = skipOddTracks && isOdd(trackCount);
+        silentTrack = userParameters->skipTracks && isOdd(trackCount);
         pos = processTrack(pos, silentTrack);
         if (pos == 0) return(EXIT_SUCCESS);
         printf(" main; returned next track header position: %08X\n", pos);
         printf("------------- next track -------------\n");
         trackCount++;
-        if (trackCount > 1) break;
+  //      if (trackCount > 9) break;
     }
-
+    closeDumpFile(userParameters->fileHandle);
     return (EXIT_SUCCESS);
 }
 
 int isOdd(int value) {
-    printf("  isOdd; returning %d for %d\n", value % 2, value);
+//    printf("  isOdd; returning %d for %d\n", value % 2, value);
     return (value % 2);
 }
 
@@ -305,7 +436,7 @@ void process_bit(int bit) {
   unsigned char val = 0;
   int i;
   
-  /* static vars */
+  /* static vars. Set once, reset by hackerish argument values > 1 */
    static unsigned long long accum = 0;
    static unsigned long long taccum = 0;
    static int bits = 0;
@@ -324,7 +455,10 @@ void process_bit(int bit) {
    static int valid_id = 0;
    static int awaiting_dam = 0;
    static int awaiting_iam = 0;
-  if (bit == 2) { /* Hack to re-initialize static variables. process_bit() is only used with argument values 0 and 1 */
+   static int sectorCount = 0;
+
+/* Hacks to re-initialize static variables. process_bit() is only used with argument values 0 and 1 */
+   if (bit == 2) { /* Executed at the start of each track */
       /* process_bit local */
       accum = 0;
       taccum = 0;
@@ -334,9 +468,10 @@ void process_bit(int bit) {
       curenc = first_encoding;
       errcount = 0;
       for (i = 0; i < N_ENCS; i++) enc_count[i] = 0;
+      sectorCount = 0;
       return;
   }
-   if (bit == 3) {
+   if (bit == 3) { /* Executed at that start of each sector */
       ibyte = dbyte = -1; // set both ibyte as dbyte in inactive mode
       awaiting_dam = 0;
       valid_id = 0;
@@ -378,7 +513,7 @@ void process_bit(int bit) {
    * another 2x for the double sampling rate).  We must not look
    * inside a region that can contain standard MFM data.
    */
-  if (uencoding != MFM && bits >= 36 && !write_splice &&
+  if (userParameters->uencoding != MFM && bits >= 36 && !write_splice &&
       (curenc != MFM || (ibyte == -1 && dbyte == -1 && mark_after == -1))) {
         switch (accum & 0xfffffffffULL) {
         case 0x8aa2a2a88ULL:  /* 0xfc / 0xd7: Index address mark */
@@ -389,6 +524,7 @@ void process_bit(int bit) {
         case 0x8aa2228aaULL:  /* 0xfb / 0xc7: Standard DAM */
         case 0x8aa222a8aULL:  /* 0xfd / 0xc7: RX02 DAM */
           curenc = change_enc(curenc, FM);
+          track->sector[sectorCount].encoding = curenc;
           if (bits < 64 && bits >= 48) {
             msg(OUT_HEX, "(+%d)", 64-bits);
             bits = 64; /* byte-align by repeating some bits */
@@ -402,6 +538,7 @@ void process_bit(int bit) {
 
         case 0xa222a8888ULL:  /* Backward 0xf8-0xfd DAM */
           curenc = change_enc(curenc, FM);
+          track->sector[sectorCount].encoding = curenc;
           backward_am++;
           msg(OUT_ERRORS, "[backward AM] ");
           break;
@@ -412,7 +549,7 @@ void process_bit(int bit) {
    * For MFM premarks, we look at 16 data bits (two copies of the
    * premark), which ends up being 32 bits of accum (2x for clocks).
    */
-  if (uencoding != FM && uencoding != RX02 &&
+  if (userParameters->uencoding != FM && userParameters->uencoding != RX02 &&
       bits >= 32 && !write_splice) {
     switch (accum & 0xffffffff) {
     case 0x52245224:
@@ -420,6 +557,7 @@ void process_bit(int bit) {
 	 (using 0-origin big-endian counting!).  Would be 0x52a452a4
 	 without missing clock. */
       curenc = change_enc(curenc, MFM);
+      track->sector[sectorCount].encoding = curenc;
       premark = 0xc2;
       if (bits < 64 && bits > 48) {
 	msg(OUT_HEX, "(+%d)", 64-bits);
@@ -434,6 +572,7 @@ void process_bit(int bit) {
 	 without missing clock.  Reading a pre-address mark backward
 	 also matches this pattern, but the following byte is then 0x80. */
       curenc = change_enc(curenc, MFM);
+      track->sector[sectorCount].encoding = curenc;
       premark = 0xa1;
       if (bits < 64 && bits > 48) {
 	msg(OUT_HEX, "(+%d)", 64-bits);
@@ -455,6 +594,7 @@ void process_bit(int bit) {
       if (mark_after < 0 && ibyte == -1 && dbyte == -1) {
 	/* 4e 4e in gap.  This should probably be byte-aligned */
 	curenc = change_enc(curenc, MFM);
+        track->sector[sectorCount].encoding = curenc;
 	if (bits < 64 && bits > 48) {
 	  /* Byte-align by dropping bits */
 	  msg(OUT_HEX, "(-%d)", bits-48);
@@ -524,6 +664,7 @@ void process_bit(int bit) {
 //      dmk_iam(0xfc, curenc);
       ibyte = -1;
       dbyte = -1;
+      track->indexMark = val;
       return;
 
     case 0xfe:
@@ -536,6 +677,7 @@ void process_bit(int bit) {
       ibyte =  0;
       dbyte = -1;
       crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
+      track->sector[sectorCount].idam = val;
       return;
 
     case 0xf8: /* Standard deleted data address mark */
@@ -552,16 +694,18 @@ void process_bit(int bit) {
       msg(OUT_HEX, "\n");
       msg(OUT_IDS, "\n#%2x ", val);
 //      dmk_data(val, curenc);
-      if ((uencoding == MIXED || uencoding == RX02) &&
+      if ((userParameters->uencoding == MIXED || userParameters->uencoding == RX02) &&
 	  (val == 0xfd ||
 	   (val == 0xf9 && (total_enc_count[RX02] + enc_count[RX02] > 0 ||
-			    uencoding == RX02)))) {
+			    userParameters->uencoding == RX02)))) {
 	curenc = change_enc(curenc, RX02);
+        track->sector[sectorCount].encoding = curenc;
       }
       /* For MFM, premark a1a1a1 is included in the CRC */
       crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
       ibyte = -1;                               // switch from IDAM zone
       dbyte = secsize(sizecode, curenc) + 2;    //  to DAM zone
+      track->sector[sectorCount].dam = val;
       return;
 
     case 0x80: /* MFM DAM or IDAM premark read backward */
@@ -584,19 +728,28 @@ void process_bit(int bit) {
   case 0:
     msg(OUT_IDS, "cyl=");
     curcyl = val;
+    track->sector[sectorCount].track = val;
     break;
   case 1:
     msg(OUT_IDS, "side=");
+    track->sector[sectorCount].head = val;
     break;
   case 2:
     msg(OUT_IDS, "sec=");
+    track->sectorOrder[sectorCount] = val;
+    track->sector[sectorCount].sector = val;
     break;
   case 3:
     msg(OUT_IDS, "size=");
     sizecode = val;
+    track->sector[sectorCount].sectorSize = val;
     break;
   case 4:
     msg(OUT_HEX, "crc=");
+    track->sector[sectorCount].idam_crc1 = val;
+    break;
+  case 5:
+    track->sector[sectorCount].idam_crc2 = val;
     break;
   case 6:
     if (crc == 0) {
@@ -618,11 +771,11 @@ void process_bit(int bit) {
     break;
   }
 
-  if (ibyte == 2) {
+  if (ibyte == 2) { // Sector number
     msg(OUT_ERRORS, "%02x ", val);
-  } else if (ibyte >= 0 && ibyte <= 3) {
+  } else if (ibyte >= 0 && ibyte <= 3) { // Track number, Side number, Encoding
     msg(OUT_IDS, "%02x ", val);
-  } else {
+  } else { // 
     msg(OUT_SAMPLES, "<");
     msg(OUT_HEX, "%02x", val);
     msg(OUT_SAMPLES, ">");
@@ -631,6 +784,15 @@ void process_bit(int bit) {
   }
 
 //  dmk_data(val, curenc);
+  if (dbyte > 2) { // 
+      track->sector[sectorCount].sectorData[secsize(sizecode, curenc) - dbyte + 2] = val;
+  } 
+  if (dbyte == 2) { 
+      track->sector[sectorCount].data_crc1 = val;
+  } 
+  if (dbyte == 1) { // 0 is not reached, so 1 is last...
+      track->sector[sectorCount].data_crc2 = val;
+  }
 
   if (ibyte >= 0) ibyte++;
   if (dbyte > 0) dbyte--;
@@ -655,7 +817,9 @@ void process_bit(int bit) {
     write_splice = WRITE_SPLICE;
     if (curenc == RX02) {
       curenc = change_enc(curenc, FM);
+      track->sector[sectorCount].encoding = curenc;
     }
+    sectorCount++;
   }
 
   /* Predetect bad MFM clock pattern.  Can't detect at decode time
@@ -691,7 +855,7 @@ void process_sample(int sample)
     float postcomp = 0.0;   //   works with FM and MFM, effectively nulling adj
 
     msg(OUT_SAMPLES, "%d", sample);
-    if (uencoding == FM) {
+    if (userParameters->uencoding == FM) {
       if (sample + adj <= fmthresh) {
         /* Short */
         len = 2;
@@ -740,16 +904,16 @@ void msg(int level, const char *fmt, ...)
 {
   va_list args;
 
-  if (level <= out_level &&
-      !(level == OUT_RAW && out_level != OUT_RAW) &&
-      !(level == OUT_HEX && out_level == OUT_RAW)) {
+  if (level <= userParameters->out_level &&
+      !(level == OUT_RAW && userParameters->out_level != OUT_RAW) &&
+      !(level == OUT_HEX && userParameters->out_level == OUT_RAW)) {
     va_start(args, fmt);
     vfprintf(stdout, fmt, args);
     va_end(args);
   }
-  if (out_file && level <= out_file_level &&
-      !(level == OUT_RAW && out_file_level != OUT_RAW) &&
-      !(level == OUT_HEX && out_file_level == OUT_RAW)) {
+  if (out_file && level <= userParameters->out_file_level &&
+      !(level == OUT_RAW && userParameters->out_file_level != OUT_RAW) &&
+      !(level == OUT_HEX && userParameters->out_file_level == OUT_RAW)) {
     va_start(args, fmt);
     vfprintf(out_file, fmt, args);
     va_end(args);
@@ -762,31 +926,33 @@ int secsize(int sizecode, int encoding)
 //    printf("sizecode: %d, encoding: %d\n", sizecode, encoding);
   int maxsize = 3;  /* 177x/179x look at only low-order 2 bits */
   switch (encoding) {
-  case MFM:
-    /* 179x can only do sizes 128, 256, 512, 1024, and ignores
-       higher-order bits.  If you need to read a 765-formatted disk
-       with larger sectors, change maxsize with the -z
-       command line option. */
-    return 128 << (sizecode % (maxsize + 1));
-
-  case FM:
-  default:
-    /* WD1771 has two different encodings for sector size, depending on
-       a bit in the read/write command that is not recorded on disk.
-       We guess IBM encoding if the size is <= maxsize, non-IBM
-       if larger.  This doesn't really matter for demodulating the
-       data bytes, only for checking the CRC.  */
-    if (sizecode <= maxsize) {
-      /* IBM */
-      return 128 << sizecode;
-    } else {
-      /* non-IBM */
-      return 16 * (sizecode ? sizecode : 256);
-    }
-
-  case RX02:
-    return 256 << (sizecode % (maxsize + 1));
-  }
+      case MFM:
+        /* 179x can only do sizes 128, 256, 512, 1024, and ignores
+           higher-order bits.  If you need to read a 765-formatted disk
+           with larger sectors, change maxsize with the -z
+           command line option. */
+        return 128 << (sizecode % (maxsize + 1));
+        break;
+      case FM:
+      default:
+        /* WD1771 has two different encodings for sector size, depending on
+           a bit in the read/write command that is not recorded on disk.
+           We guess IBM encoding if the size is <= maxsize, non-IBM
+           if larger.  This doesn't really matter for demodulating the
+           data bytes, only for checking the CRC.  */
+        if (sizecode <= maxsize) {
+          /* IBM */
+          return 128 << sizecode;
+        } else {
+          /* non-IBM */
+          return 16 * (sizecode ? sizecode : 256);
+        }
+        break;
+      case RX02:
+        return 256 << (sizecode % (maxsize + 1));
+        break;
+      }
+        
 }
 
 int mfm_valid_clock(unsigned long long accum)
