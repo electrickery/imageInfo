@@ -1,8 +1,26 @@
 /* 
- * File:   main.c
+ * File:   dfiProcess.c
  * Author: fjkraan
+ * 
+ * Based on decoding routines Copyright (C) 2000 Timothy Mann 
+ * Might depend on Linux Catweasel driver code by Michael Krause
  *
  * Created on January 21, 2012, 2:50 PM
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ */
  */
 
 #include <stdio.h>
@@ -22,40 +40,13 @@
 
 int fd_img; 
 struct trackHeader trackHeader;
-int pos; /* fileHeaderSize */
-int skipOddTracks;
-int uencoding;
-//int curenc;
-unsigned char premark;
+int uencoding;  // user set encoding
 
-unsigned long long accum, taccum;
-int bits;
-
-int mark_after;
-int write_splice; /* bit counter, >0 if we may be in a write splice */
-int first_encoding;  /* first encoding to try on next track */
-
-char *enc_name[] = { "autodetect", "FM", "MFM", "RX02" };
-
-  int good_sectors;
-  int total_good_sectors;
-  int total_errcount;
-  int errcount;
-  int enc_count[N_ENCS];
-  int total_enc_count[N_ENCS]; 
-  int err_tracks;
-  int good_tracks;
-  
-int index_edge;
-int out_level = OUT_HEX;
+int out_level = OUT_QUIET;
 int out_file_level = OUT_QUIET;
 int dmk_iam_pos = -1;
 int dmk_ignore = 0;
 int cylseen = -1;
-unsigned short crc;
-
-unsigned char* dmk_track = NULL;
-
 
 /*
  * 
@@ -127,11 +118,10 @@ unsigned int processTrackHeader(unsigned int pos) {
 }
 
 void initHistArray(histoGraph_t *hist) {
-        int i;
-        for (i = 0; i < hist->histSize; i++) {
-            hist->hist[i] = 0;
-        }
-   
+    int i;
+    for (i = 0; i < hist->histSize; i++) {
+        hist->hist[i] = 0;
+    }
 }
 
 unsigned int processTrack(unsigned int pos, int silent) {
@@ -146,6 +136,7 @@ unsigned int processTrack(unsigned int pos, int silent) {
         histoGraph_t *histoGraph = &hs;    // pointerize it
         histoGraph->histSize = HISTSIZE;
         initHistArray(histoGraph);
+        
         char overflow      = 0x7F;
         int tresHoldFactor = 200;
         char dfiData[trackHeader.trackSize];
@@ -178,8 +169,6 @@ unsigned int processTrack(unsigned int pos, int silent) {
                 highest = (carry > highest) ? carry : highest;
                 histoGraph->hist[carry & (histoGraph->histSize - 1)] += 1;
                 
-                index_edge = 0;
-
                 process_sample(carry);
                 carry = 0;
             }
@@ -217,32 +206,66 @@ void printHist(histoGraph_t *hist, int printedTresHoldFactor) {
         printf("Peaks: %d\n", peakCount);
 }
 
+void usage() {
+    printf(" usage; -d <dfiImageFile> : (mandatory)\n");
+    printf("        -e encoding   1 = FM (SD), 2 = MFM (DD or HD), 3 = RX02\n");
+    printf("        -s : skip odd tracks in image\n");    
+    printf("        -v verbosity  Amount of output [%d]\n", out_level);
+    printf("               0 = No output\n");
+    printf("               1 = Summary of disk\n");
+    printf("               2 = + summary of each track\n");
+    printf("               3 = + individual errors\n");
+    printf("               4 = + track IDs and DAMs\n");
+    printf("               5 = + hex data and event flags\n");
+    printf("               6 = like 4, but with raw data too\n");
+    printf("               7 = like 5, but with Catweasel samples too\n");
+    printf("               21 = level 2 to logfile, 1 to screen, etc.\n");
+}
+
 int main(int argc, char** argv) {
     char ch;
-    char *optstr = "d:sh";
+    char *optstr = "d:e:shv:";
     int trackCount = 0;
     int silentTrack;
-    pos = 4; /* fileHeaderSize */
-    skipOddTracks = 0;
-    uencoding = MIXED;
-    index_edge = 0;
+    int pos = 4; /* fileHeaderSize */
+    int skipOddTracks = 0;
+    uencoding = FM;
 
     while( -1 != (ch=getopt(argc,argv,optstr))) {
         switch(ch) {
             case 'd':           
                 openImage(optarg);
                 break;
+            case 'e':
+                uencoding = strtol(optarg, NULL, 0);
+                if (uencoding < FM || uencoding > RX02) {
+                    printf("Encoding not valid: %d\n", uencoding);
+                    usage();
+                    exit(1);
+                }
+                break;
+            case 'h':
+                usage();
+                exit(1);
+                break;
             case 's':
                 skipOddTracks = 1;
                 break;
-            case '?':
-            case 'h':
-                printf(" usage; -d <dfiImageFile> : (mandatory)\n");
-                printf("        -s : skip odd tracks in image\n");
-                exit(1);
+            case 'v':
+                out_level = strtol(optarg, NULL, 0);
+                if (out_level < OUT_QUIET || out_level > OUT_SAMPLES * 11) {
+                  usage();
+                  exit(1);
+                  break;
+                }
+                out_file_level = out_level / 10;
+                out_level = out_level % 10;
                 break;
+            case '?':
             default:
                 printf(" main; error?  condition unaccounted for?\n");
+                usage();
+                exit(1);
                 break;
         }
     }
@@ -263,10 +286,10 @@ int main(int argc, char** argv) {
         silentTrack = skipOddTracks && isOdd(trackCount);
         pos = processTrack(pos, silentTrack);
         if (pos == 0) return(EXIT_SUCCESS);
-        printf(" main; returned track header position: %08X\n", pos);
+        printf(" main; returned next track header position: %08X\n", pos);
         printf("------------- next track -------------\n");
         trackCount++;
-  //      if (trackCount > 1) break;
+        if (trackCount > 1) break;
     }
 
     return (EXIT_SUCCESS);
@@ -286,12 +309,21 @@ void process_bit(int bit) {
    static unsigned long long accum = 0;
    static unsigned long long taccum = 0;
    static int bits = 0;
+   static unsigned short crc;
    static int mark_after = -1;
    static int write_splice = 0;
    static int curenc = 0;
    static int ibyte, dbyte;
    static int sizecode = 0;
-
+   static unsigned char premark = 0;
+   static int first_encoding;  /* first encoding to try on next track */
+   static int errcount;
+   static int good_sectors = 0;
+   static int enc_count[N_ENCS];
+   static int total_enc_count[N_ENCS];
+   static int valid_id = 0;
+   static int awaiting_dam = 0;
+   static int awaiting_iam = 0;
   if (bit == 2) { /* Hack to re-initialize static variables. process_bit() is only used with argument values 0 and 1 */
       /* process_bit local */
       accum = 0;
@@ -300,18 +332,21 @@ void process_bit(int bit) {
       premark = 0;
       mark_after = -1; 
       curenc = first_encoding;
+      errcount = 0;
+      for (i = 0; i < N_ENCS; i++) enc_count[i] = 0;
       return;
   }
    if (bit == 3) {
       ibyte = dbyte = -1; // set both ibyte as dbyte in inactive mode
+      awaiting_dam = 0;
+      valid_id = 0;
+      errcount++;
       return; 
   }
   
   /* interim localised vars */
 //  unsigned short crc;
   int backward_am = 0;
-
-  
 
   accum = (accum << 1) + bit;
   taccum = (taccum << 1) + bit;
@@ -324,7 +359,7 @@ void process_bit(int bit) {
    * our 64-bit shift register (accum), look for marks in the lower
    * half, but decode data from the upper half.  When we recognize a
    * mark (or certain other patterns), we repeat or drop some bits to
-   * achieve proper clock/data separatation and proper byte-alignment.
+   * achieve proper clock/data separation and proper byte-alignment.
    * Pre-detecting the marks lets us do this adjustment earlier and
    * decode data more cleanly.
    *
@@ -484,7 +519,7 @@ void process_bit(int bit) {
     case 0xfc:
       /* Index address mark */
       if (curenc == MFM && premark != 0xc2) break;
-      check_missing_dam();
+      check_missing_dam(awaiting_dam);
       msg(OUT_IDS, "\n#fc ");
 //      dmk_iam(0xfc, curenc);
       ibyte = -1;
@@ -494,13 +529,13 @@ void process_bit(int bit) {
     case 0xfe:
       /* ID address mark */
       if (curenc == MFM && premark != 0xa1) break;
-      if (dmk_awaiting_iam) break;
-      check_missing_dam();
+      if (awaiting_iam) break;
+      check_missing_dam(awaiting_dam);
       msg(OUT_IDS, "\n#fe ");
 //      dmk_idam(0xfe, curenc);
-      ibyte = 0;
-      crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
+      ibyte =  0;
       dbyte = -1;
+      crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
       return;
 
     case 0xf8: /* Standard deleted data address mark */
@@ -508,14 +543,14 @@ void process_bit(int bit) {
     case 0xfa: /* WD1771 user data address mark */
     case 0xfb: /* Standard data address mark */
     case 0xfd: /* RX02 data address mark */
-      if (!dmk_awaiting_dam) {
+      if (!awaiting_dam) {
 	msg(OUT_ERRORS, "[unexpected DAM] ");
 	errcount++;
 	break;
       }
-      dmk_awaiting_dam = 0;
+      awaiting_dam = 0;
       msg(OUT_HEX, "\n");
-      msg(OUT_IDS, "#%2x ", val);
+      msg(OUT_IDS, "\n#%2x ", val);
 //      dmk_data(val, curenc);
       if ((uencoding == MIXED || uencoding == RX02) &&
 	  (val == 0xfd ||
@@ -527,7 +562,6 @@ void process_bit(int bit) {
       crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
       ibyte = -1;                               // switch from IDAM zone
       dbyte = secsize(sizecode, curenc) + 2;    //  to DAM zone
-      printf("dbyte: %X ", dbyte);
       return;
 
     case 0x80: /* MFM DAM or IDAM premark read backward */
@@ -567,18 +601,19 @@ void process_bit(int bit) {
   case 6:
     if (crc == 0) {
       msg(OUT_IDS, "[good ID CRC] ");
-      dmk_valid_id = 1;
+      valid_id = 1;
     } else {
       msg(OUT_ERRORS, "[bad ID CRC] ");
       errcount++;
       ibyte = -1;
     }
     msg(OUT_HEX, "\n");
-    dmk_awaiting_dam = 1;
+    awaiting_dam = 1;
 //    dmk_check_wraparound();
     break;
   case 18:
     /* Done with post-ID gap */
+     msg(OUT_IDS, "\n");
     ibyte = -1;
     break;
   }
@@ -603,20 +638,20 @@ void process_bit(int bit) {
 
   if (dbyte == 0) {
     if (crc == 0) {
-      msg(OUT_IDS, "[good data CRC] ");
-      if (dmk_valid_id) {
+      msg(OUT_IDS, "[good data CRC]\n");
+      if (valid_id) {
 	if (good_sectors == 0) first_encoding = curenc;
 	good_sectors++;
 	enc_count[curenc]++;
 	cylseen = curcyl;
       }
     } else {
-      msg(OUT_ERRORS, "[bad data CRC] ");
+      msg(OUT_ERRORS, "[bad data CRC]\n");
       errcount++;
     }
     msg(OUT_HEX, "\n");
     dbyte = -1;
-    dmk_valid_id = 0;
+    valid_id = 0;
     write_splice = WRITE_SPLICE;
     if (curenc == RX02) {
       curenc = change_enc(curenc, FM);
@@ -645,16 +680,17 @@ void process_sample(int sample)
 {
     static float adj = 0.0;
     int len;
-    int cwclock    =   4;       // cw clock multiplier 1=7.0805 MHz, 2=14.161MHz, 4=28.322MHz
+    int cwclock    =   1;       // cw clock multiplier 1=7.0805 MHz, 2=14.161MHz, 4=28.322MHz
                                 // df uses 25, 50, 100MHz
     int fmthresh   = 123;
     int mfmthresh1 =  98;
     int mfmthresh2 = 139;
     float mfmshort = -1.0;
-    float postcomp = 0.1; // original: 0.5
-    int uencoding = FM;
+//    float postcomp = 0.5; // original
+//    float postcomp = 0.1; // works with FM fmthresh   = 123;
+    float postcomp = 0.0;   //   works with FM and MFM, effectively nulling adj
 
- //   msg(OUT_SAMPLES, "%d", sample);
+    msg(OUT_SAMPLES, "%d", sample);
     if (uencoding == FM) {
       if (sample + adj <= fmthresh) {
         /* Short */
@@ -684,22 +720,10 @@ void process_sample(int sample)
     while (--len) process_bit(0);
 }
 
-/*
-void init_decoder(void)
-{
-    // process_bit(2); re-initialize static local vars
-  accum = 0;
-  taccum = 0;
-  bits = 0;
-  ibyte = dbyte = -1;
-  premark = 0;
-  mark_after = -1;
-//  curenc = first_encoding;
-}
-*/
 
 int change_enc(int curenc, int newenc)
 {
+  char *enc_name[] = { "autodetect", "FM", "MFM", "RX02" };
   if (curenc != newenc) {
     msg(OUT_ERRORS, "[%s->%s] ", enc_name[curenc], enc_name[newenc]);
     return(newenc);
@@ -735,7 +759,7 @@ void msg(int level, const char *fmt, ...)
 
 int secsize(int sizecode, int encoding)
 {
-    printf("sizecode: %d, encoding: %d\n", sizecode, encoding);
+//    printf("sizecode: %d, encoding: %d\n", sizecode, encoding);
   int maxsize = 3;  /* 177x/179x look at only low-order 2 bits */
   switch (encoding) {
   case MFM:
@@ -787,7 +811,6 @@ char* plu(int val)
    $Id: crc.c,v 1.2 2001/06/12 07:31:43 mann Exp $
 */
 
-
 /* Slow way, not using table */
 unsigned short CALC_CRC1a(unsigned short crc, unsigned char byte)
 {
@@ -800,8 +823,6 @@ unsigned short CALC_CRC1a(unsigned short crc, unsigned char byte)
   return crc;
 }
 
-
-
 /* Recompute the CRC with len bytes appended. */
 unsigned short calc_crc(unsigned short crc,
 			unsigned char const *buf, int len) 
@@ -812,12 +833,9 @@ unsigned short calc_crc(unsigned short crc,
   return crc;
 }
 
-void check_missing_dam(void)
+void check_missing_dam(int dmk_awaiting_dam)
 {
   if (!dmk_awaiting_dam) return;
-  dmk_awaiting_dam = 0;
-  dmk_valid_id = 0;
   process_bit(3);
-  errcount++;
   msg(OUT_ERRORS, "[missing DAM] ");
 }

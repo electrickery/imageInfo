@@ -70,13 +70,22 @@ typedef struct  {
     int hist[512];
 } histoGraph_t;
 
+void openImage(char *dImage);
+int checkImageHeader();
 int isOdd(int value);
+unsigned int processTrackHeader(unsigned int pos);
+//void initHistArray(histoGraph_t *hist)
+//unsigned int processTrack(unsigned int pos, int silent);
+//void printHist(histoGraph_t *hist, int printedTresHoldFactor);
+//int main(int argc, char** argv);
+void initHistArray(histoGraph_t *hist);
+void printHist(histoGraph_t *hist, int printedTresHoldFactor);
+
+/* Decoding routines Copyright (C) 2000 Timothy Mann */
 
 void process_bit(int bit);
 
 void process_sample(int sample);
-
-void init_decoder(void);
 
 int change_enc(int curenc, int newenc);
 
@@ -86,11 +95,7 @@ int secsize(int sizecode, int encoding);
 
 int mfm_valid_clock(unsigned long long accum);
 
-void initHistArray(histoGraph_t *hist);
-
-void printHist(histoGraph_t *hist, int printedTresHoldFactor);
-
-void check_missing_dam(void);
+void check_missing_dam(int dmk_awaiting_dam);
 
 /* Accelerator table to compute the CRC eight bits at a time */
 unsigned short const crc16_table[256] = {
@@ -142,4 +147,25 @@ unsigned short const crc16_table[256] = {
 #define RX02 3
 #define N_ENCS 4
 
-int dmk_valid_id, dmk_awaiting_dam, dmk_awaiting_iam;
+#define HISTSIZE 512;
+
+typedef struct  {
+    int sectorSize;
+    int sectorData[1024];
+    char idam;
+    int sector;
+    int head;
+    int track;
+    int number;
+    int idam_crc;
+    char dam;
+    int data_crc;
+} sector_t;
+
+typedef struct {
+    int hardwareTrack;
+    int hardwareSide;
+    int sectorOrder[30];
+    sector_t sector[30];
+    char indexMark;
+} track_t;
