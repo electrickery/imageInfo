@@ -13,7 +13,7 @@ all: $(EXE)
 progs: $(EXE)
 
 imageInfo$E: imageInfo.c crc.c
-	$(CC) $(CFLAGS) imageInfo.c crc.c -o $(DPEXE)
+	$(CC) $(CFLAGS) imageInfo.c crc.c imageIndex.c imageFile.c newdos.c logger.c -o $(DPEXE)
 	mv $(DPEXE) dist/Debug/GNU-Linux-x86/
 
 clean:

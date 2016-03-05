@@ -13,12 +13,16 @@
 #include <unistd.h>
 #include <stdarg.h>
 
-#include "imageInfo.h"
-
+#include "imageFile.h"
+#include "imageIndex.h"
 #include "logger.h"
 #include "crc.h"
 #include "imageSignatures.h"
 #include "trsdos.h"
+#include "newdos.h"
+#include "jv3.h"
+#include "dmk.h"
+#include "imageInfo.h"
 
 /* ImageInfo -  Analyse disk images for typical TRS-80  formats, being JV1, JV3 and DMK
  *              The tool builds a format independent index of the sectors in the image, 
@@ -33,20 +37,18 @@ int main(int argc, char** argv) {
     userParameters_t *userParameters = &ups;
     userParameters->errorMessage = "";
     userParameters->fileHandle = NULL;
-    unsigned char dt[TRSDOS_SECTOR_SIZE];
-    
+    unsigned char dt[TRSDOS_SECTOR_SIZE];    
     unsigned char *data = &dt[0];
 
-    SectorDescriptor_t sd[II_SECTORMAX];
-    SectorDescriptor_t *imageIndex = &sd[0];
     SectorDescriptor_t sp;
     SectorDescriptor_t *sectorParams = &sp;
-    DiskProperties_t dp;
-    DiskProperties_t *diskProperties = &dp;
+    SectorDescriptor_t sd[II_SECTORMAX];
+    SectorDescriptor_t *imageIndex = &sd[0];
+    ImageProperties_t dp;
+    ImageProperties_t *imageProperties = &dp;
     int directoryTrack;
     int sectorsPerTrack;
-
-    char *techDirHeader = "Ac          Ov Ef Rl  Filename/Ext Hash UpPw AcPw EOFs   G1    G2    G3    G4  FXDE\n";
+    int isValidImage;
 
     optionParse(argc, argv, userParameters);
     
@@ -56,155 +58,132 @@ int main(int argc, char** argv) {
     }
     
     cleanImageIndex(imageIndex);
-    if (jv1Check(userParameters, imageIndex)) {
-        getDiskProperties(diskProperties, imageIndex);
-        sectorParams->track  = 0;
-        sectorParams->sector = 0;
-        sectorParams->side   = 0;
-        sectorParams->flags  = SD_SIZE_256;        
-        getSector(data, sectorParams, imageIndex, userParameters);
-        directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos23);
-        if (directoryTrack != 0) {
-            logger(INFO, "Boot sector looks like TRSDOS 2.x or similar DOS\n");
-            if (!userParameters->showDirectory) exit(0);           
-            sectorParams->track = directoryTrack;
-            sectorParams->sector = DIR_GAT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-            showGAT(INFO, data, TRSDOS_SECTOR_SIZE);
-            sectorParams->sector = DIR_HIT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);            
-            showHIT(INFO, data, TRSDOS_SECTOR_SIZE, diskProperties);
-            logger(INFO, "Directory sectors 2 - 9:\n");
-            int d;
-            logger(INFO, techDirHeader);
-            for (d = DIR_FIRST_ENTRY_SECTOR; d < DIR_SECTORS_TRSDOS23; d++) {
-                sectorParams->sector = d;
-                getSector(data, sectorParams, imageIndex, userParameters);
-//                logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE); 
-                logger(INFO, "Sector %d:\n", d);
-                showDIR(INFO, data, TRSDOS_SECTOR_SIZE);
-            }
-        }
+    isValidImage = jv1Check(userParameters, imageIndex);
+    if (isValidImage) {
+        checkImage(imageIndex, userParameters);
         exit(0);
     }
     
     cleanImageIndex(imageIndex);   
-    if (jv3Check(userParameters, imageIndex)) {
-        getDiskProperties(diskProperties, imageIndex);
-        sectorsPerTrack = diskProperties->track1SectorCount;
-        sectorParams->track  = 0;
-        sectorParams->sector = 0;
-        sectorParams->side   = 0;
-        sectorParams->flags  = SD_SIZE_256; 
-        getSector(data, sectorParams, imageIndex, userParameters);
-//        logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-        directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos23);
-        if (directoryTrack != 0) {
-            logger(INFO, "Boot sector looks like TRSDOS 2.x or similar DOS\n");
-            if (!userParameters->showDirectory) exit(0);
-            sectorParams->track  = directoryTrack;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-            sectorParams->sector = DIR_GAT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-            showGAT(INFO, data, TRSDOS_SECTOR_SIZE);
-            sectorParams->sector = DIR_HIT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);            
-            showHIT(INFO, data, TRSDOS_SECTOR_SIZE, diskProperties);
-            logger(INFO, "Directory sectors 2 - %d:\n", sectorsPerTrack -1);
-            int d;
-            logger(INFO, techDirHeader);
-            for (d = DIR_FIRST_ENTRY_SECTOR; d < sectorsPerTrack; d++) {
-                sectorParams->sector = d;
-                getSector(data, sectorParams, imageIndex, userParameters);
-//                logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE); 
-                logger(INFO, "Sector %d:\n", d);
-                showDIR(INFO, data, TRSDOS_SECTOR_SIZE);
-            }
-            exit(0);
-        }
-        if (checkBootSignature(data, bootSectorSignature_trsdos27)) {
-            logger(INFO, "Boot sector looks like TRSDOS 2.7\n");
-            exit(0);
-        }
-        directoryTrack = checkBootSignature(data, bootSectorSignature_dosplus);
-        if (directoryTrack != 0) {
-            logger(INFO, "Boot sector looks like DOSPlus\n");
-            if (!userParameters->showDirectory) exit(0);
-            sectorParams->track  = directoryTrack;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-            sectorParams->sector = DIR_GAT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-            showGAT(INFO, data, TRSDOS_SECTOR_SIZE);
-            sectorParams->sector = DIR_HIT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-//            logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);            
-            showHIT(INFO, data, TRSDOS_SECTOR_SIZE, diskProperties);
-            logger(INFO, "Directory sectors 2 - 9:\n");
-            int d;
-            logger(INFO, techDirHeader);
-            for (d = DIR_FIRST_ENTRY_SECTOR; d < sectorsPerTrack; d++) {
-                sectorParams->sector = d;
-                getSector(data, sectorParams, imageIndex, userParameters);
-//                logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE); 
-                logger(INFO, "Sector %d:\n", d);
-                showDIR(INFO, data, TRSDOS_SECTOR_SIZE);
-            }
-           exit(0);
-        }
+    isValidImage = jv3Check(userParameters, imageIndex);
+    if (isValidImage) {
+        checkImage(imageIndex, userParameters);
         exit(0);
     }
     
     cleanImageIndex(imageIndex);
-    if (dmkCheck(userParameters, imageIndex)) {
-        getDiskProperties(diskProperties, imageIndex);
-        sectorsPerTrack = diskProperties->track1SectorCount;
-        sectorParams->track  = 0;
-        sectorParams->sector = 0;
-        sectorParams->side   = 0;
-        getSector(data, sectorParams, imageIndex, userParameters);
-//        logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
-        directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos23);
-        if (directoryTrack != 0) {
-            logger(INFO, "Boot sector looks like TRSDOS 2.x or similar DOS\n");
-            if (!userParameters->showDirectory) exit(0);
-            sectorParams->track  = DIR_GAT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-            sectorParams->track  = directoryTrack;
-            getSector(data, sectorParams, imageIndex, userParameters);
-            showGAT(INFO, data, TRSDOS_SECTOR_SIZE);
-            sectorParams->sector = DIR_HIT_SECTOR;
-            getSector(data, sectorParams, imageIndex, userParameters);
-            showHIT(INFO, data, TRSDOS_SECTOR_SIZE, diskProperties);
-            int d;
-            logger(INFO, techDirHeader);
-            for (d = DIR_FIRST_ENTRY_SECTOR; d < sectorsPerTrack; d++) {
-                sectorParams->sector = d;
-                getSector(data, sectorParams, imageIndex, userParameters);
-//                logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE); 
-                logger(INFO, "Sector %d:\n", d);
-                showDIR(INFO, data, TRSDOS_SECTOR_SIZE);
-            }
-            
-            exit(0);
-        }
-        if (checkBootSignature(data, bootSectorSignature_trsdos27)) {
-            logger(INFO, "Boot sector looks like TRSDOS 2.7\n");
-            exit(0);
-        }
+    isValidImage = dmkCheck(userParameters, imageIndex);
+    if (isValidImage) {
+        checkImage(imageIndex, userParameters);
         exit(0);
     }
 
     logger(WARN, "Image type '%s' not recognised\n", userParameters->imageFile);
+    
     closeImage(userParameters);
     
     exit(0);
+}
+
+int checkImage(SectorDescriptor_t *imageIndex, userParameters_t *tuserParameters) {
+    ImageProperties_t dp;
+    ImageProperties_t *imageProperties = &dp;
+    SectorDescriptor_t sp;
+    SectorDescriptor_t *sectorParams = &sp;
+    unsigned char dt[TRSDOS_SECTOR_SIZE];    
+    unsigned char *data = &dt[0];
+    int sectorsPerTrack;
+    int directoryTrack;
+    
+    getDiskProperties(imageProperties, imageIndex);
+    sectorsPerTrack = imageProperties->track1SectorCount;
+    sectorParams->track  = 0;
+    sectorParams->sector = 0;
+    sectorParams->side   = 0;
+    getSectorLocation(sectorParams, imageIndex);
+    getSector(data, sectorParams, tuserParameters);
+
+    directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos23);
+    if (directoryTrack != 0) {
+        logger(INFO, "Boot sector looks like TRSDOS 2.x or similar DOS\n");
+        
+        sectorParams->track  = 0;
+        sectorParams->sector = 2;
+        sectorParams->side   = 0;
+        getSectorLocation(sectorParams, imageIndex);
+        getSector(data, sectorParams, tuserParameters);
+        if (logPDRIVE(INFO, data)) {
+            logger(INFO, "Disk has a valid NewDos/80 PDRIVE table\n");
+        }
+        
+        if (!tuserParameters->showDirectory) return(0);
+        sectorParams->track = directoryTrack;
+        showDir(sectorParams, imageIndex, tuserParameters);
+        return(1);
+    }
+    directoryTrack = checkBootSignature(data, bootSectorSignature_dosplus);
+    if (directoryTrack != 0) {
+        logger(INFO, "Boot sector looks like DOSPlus\n");
+        if (!tuserParameters->showDirectory) return(0);
+        sectorParams->track = directoryTrack;
+        showDir(sectorParams, imageIndex, tuserParameters);
+        return(1);
+    }
+    directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos27);
+    if (directoryTrack != 0) {
+        logger(INFO, "Boot sector looks like TRSDOS 2.7\n");
+        if (!tuserParameters->showDirectory) return(0);
+        sectorParams->track = directoryTrack;
+        showDir(sectorParams, imageIndex, tuserParameters);
+        return(1);
+    }
+    directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos13);
+    if (directoryTrack != 0) {
+        logger(INFO, "Boot sector looks like TRSDOS 1.3\n");
+        if (!tuserParameters->showDirectory) return(0);
+        sectorParams->track = directoryTrack;
+        showDir(sectorParams, imageIndex, tuserParameters);
+        return(1);
+    }
+    directoryTrack = checkBootSignature(data, bootSectorSignature_loboLdos);
+    if (directoryTrack != 0) {
+        logger(INFO, "Boot sector looks like Lobo LDOS\n");
+        if (!tuserParameters->showDirectory) return(0);
+        sectorParams->track = directoryTrack;
+        showDir(sectorParams, imageIndex, tuserParameters);
+        return(1);
+    }
+    logger(INFO, "Boot track:\n");
+    logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE);
+    return(0);
+}
+
+int getSector(unsigned char *data, SectorDescriptor_t *sectorParams, 
+        userParameters_t *tuserParameters) {
+//    getSector(unsigned char *data, int location, int size, int doubleBytes, userParameters_t *tuserParameters) {
+    unsigned char rdt[MAX_SECTOR_SIZE * 2];
+    unsigned char *rawData = &rdt[0];
+    int doubleBytes = sectorParams->flags & DMK_DATA_DOUBLER_MASK;
+    int location    = sectorParams->sectorLocation;
+    
+    int size, interval;
+    
+    if (doubleBytes) {
+        size = TRSDOS_SECTOR_SIZE * 2;
+        interval = 2;
+    } else {
+        size = TRSDOS_SECTOR_SIZE;
+        interval = 1;
+    }
+    
+    logger(TRACE, "Found track %d, sector %d, side %d, fl %02X at location %05X\n", 
+            sectorParams->track, sectorParams->sector, sectorParams->side, sectorParams->flags, location);
+    
+    readFromImage(rawData, location, size, tuserParameters);
+    dataUnDoubler(rawData, data, size, interval);
+    logger(TRACE, (doubleBytes) ? "sector reduced:\n" : "sector copied:\n");
+
+    return 0;
 }
 
 int checkBootSignature(unsigned char *data, unsigned short bootSectorSignature[]) {
@@ -281,7 +260,7 @@ void optionParse(int argc, char** argv, userParameters_t *tuserParameters) {
 }
 
 void usage(userParameters_t *tuserParameters) {
-    logger(ERROR, "imageInfo version 0.7\n");
+    logger(ERROR, "imageInfo version 0.8\n");
     if (strncmp(tuserParameters->errorMessage, "", 1) != 0) {
         logger(ERROR, "%s\n", tuserParameters->errorMessage);
     }
@@ -312,16 +291,16 @@ int jv1Check(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
     SectorDescriptor_t *sectorParams = &sp;
     
     if (size == JV1_SSSD35_SIZE) {
-        logger(INFO, "Size is correct for a 35 tracks, 10 sectors of 256 bytes JV1 image\n");
+        logger(INFO, " Size is correct for a 35 tracks, 10 sectors of 256 bytes JV1 image\n");
         maxTrack = 35;
     } else if (size == JV1_SSSD40_SIZE) {
-        logger(INFO, "Size is correct for a 40 tracks, 10 sectors of 256 bytes JV1 image\n");
+        logger(INFO, " Size is correct for a 40 tracks, 10 sectors of 256 bytes JV1 image\n");
         maxTrack = 40;
     } else if (size == JV1_SSSD80_SIZE) {
         maxTrack = 80;
-        logger(INFO, "Size is correct for a 80 tracks, 10 sectors of 256 bytes JV1 image\n");
+        logger(INFO, " Size is correct for a 80 tracks, 10 sectors of 256 bytes JV1 image\n");
     } else {
-        logger(INFO,"Size of %d bytes does not match a standard JV1 image\n", size);
+        logger(INFO," Size of %d bytes does not match a standard JV1 image\n", size);
         return 0;
     }
     
@@ -343,7 +322,8 @@ int jv1Check(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
     sectorParams->sector = 0;
     sectorParams->side = 0;
     sectorParams->flags = SD_SIZE_256;
-    getSector(data, sectorParams, imageIndex, tuserParameters);
+    getSectorLocation(sectorParams, imageIndex);
+    getSector(data, sectorParams, tuserParameters);
     directoryTrack = checkBootSignature(data, bootSectorSignature_trsdos23);
 
     logger(WARN, "Image is a ");
@@ -410,13 +390,13 @@ int jv3Check(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
         imageIndex[i].sectorLocation = previousOffset + previousSectorSize;
         previousOffset = imageIndex[i].sectorLocation;
         previousSectorSize = sectorSize;
-        logger(DEBUG, "%d", i);
-        logger(DEBUG, " (@ %05X)", imageIndex[i].sectorLocation);
-        logger(DEBUG, ", tr: %d, sc: %d, fl: %02X ", track, sector, flags);
+        logger(TRACE, " %d", i);
+        logger(TRACE, " (@ %05X)", imageIndex[i].sectorLocation);
+        logger(TRACE, ", tr: %d, sc: %d, fl: %02X ", track, sector, flags);
         jv3Flags(TRACE, flags);
-        logger(DEBUG, "\n");
+        logger(TRACE, "\n");
     }
-    logger(DEBUG, "Highest track: %d, Sides: %d, ", trackHighCount, (side) ? 2 : 1);
+    logger(DEBUG, " Highest track: %d, Sides: %d, ", trackHighCount, (side) ? 2 : 1);
     result = readFromImage(&wpFlag, wpFlagLocation, 1, tuserParameters); // the next byte after headers1
     logger(DEBUG, "(0x%02X) @ %05X: ", wpFlag[0], wpFlagLocation);
     if (wpFlag[0] == JV3_WPFLAG_OFF) {
@@ -425,14 +405,14 @@ int jv3Check(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
         logger(DEBUG, "Write Protected ");
     }
         
-    if (trackHighCount >= MINIMUM_TRACKS && trackHighCount < MAXIMUM_TRACKS && sectorHighCount < MAXIMUM_SECTORS) {
+    if (trackHighCount >= MINIMUM_TRACKS && trackHighCount < MAXIMUM_TRACKS && sectorHighCount < MAX_SECTORS_PER_TRACK) {
         logger(WARN, "Image is a ");
         logger(ERROR, "JV3");
         logger(WARN, " image");
         logger(ERROR, "\n");
         return 1; // only sane values found for a normal disk.
     }
-    logger(INFO, "Image does not match a JV3 profile\n");
+    logger(INFO, " Image does not match a JV3 profile\n");
     return 0;
 }
 
@@ -476,11 +456,14 @@ int dmkCheck(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
     logger(INFO, "DMK check:\n");
        
     result = readFromImage(dmkImageHeader, 0, sizeof(DMKImageHeader), tuserParameters);
-    
+    if (!result) {
+        logger(ERROR, "Failure reading from image. Exiting.");
+        exit(0);
+    }
     writeProtect = dmkImageHeader->writeProtect;
     singleDensitySingleByte = dmkImageHeader->options & DMK_SINGLE_DENSITY_SINGLE_BYTE;
     
-    logger(DEBUG, "Image: tracks: %d, ", dmkImageHeader->tracks);
+    logger(DEBUG, " Tracks: %d, ", dmkImageHeader->tracks);
     unsigned short trackLength = dmkImageHeader->trackLengthLSB + 
         dmkImageHeader->trackLengthMSB * 256;
     if (trackLength == 0x0CC0) { 
@@ -495,7 +478,6 @@ int dmkCheck(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
         logger(DEBUG, "Double Density 5 1/4\", Single Density sectors only"); 
         diskDoubleDensity = 1;
         diskSize5 = 1;
-//        return 0;
     } else if (trackLength == 0x14E0) {
         logger(DEBUG, "Single Density 8\"");
         diskDoubleDensity = 0;
@@ -508,20 +490,21 @@ int dmkCheck(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
         logger(DEBUG, "unknown DMK type, trackLength: 0x%04X.\n", trackLength);
         return 0; // No reason to continue.
     }
+//    logger(WARN, "Image is a DMK image\n");
     logger(DEBUG, " (0x%04X), ", trackLength);
-    logger(DEBUG, "%s, ", (dmkImageHeader->options & DMK_SINGLE_SIDED_ONLY) ? "Single Sided" : "Double Sided" );
+    logger(DEBUG, "%s Sided, ", (dmkImageHeader->options & DMK_SINGLE_SIDED_ONLY) ? "Single" : "Double" );
     if (writeProtect == 0xFF) {
-        logger(WARN, "Write Protected ");
+        logger(DEBUG, "Write Protected ");
     } else if (writeProtect == 0x00) {
-        logger(WARN, "Write Enabled ");
+        logger(DEBUG, "Write Enabled ");
     } else {
-        logger(WARN, "unknown write state: 0x%02X (should be Write Protected (0xFF) or Write Enabled (0x00)) ", writeProtect);
+        logger(INFO, ", unknown write state: 0x%02X (should be Write Protected (0xFF) or Write Enabled (0x00)) ", writeProtect);
     }
     logger(TRACE, ", %s density (obsolete), ", 
             ((dmkImageHeader->options & DMK_IGNORE_DENSITY) == 1) ? "Ignore" : "Respect");
     logger(TRACE, "SD sector bytes are written %s\n", (singleDensitySingleByte) ? "once" : "twice");
     
-    crcCheckErrors = dmkTrackParser(imageIndex, dmkImageHeader, tuserParameters);
+    crcCheckErrors = dmkImageParser(imageIndex, dmkImageHeader, tuserParameters);
     
     if (crcCheckErrors == 0) {
         logger(DEBUG, " All CRCs ok");
@@ -530,19 +513,18 @@ int dmkCheck(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
     }
     logger(DEBUG, ".\n");
 
-    if (!dmkCheckGeometricSanity(imageIndex)) return 0;
+    if (!checkGeometricSanity(imageIndex)) return 0;
     return 1; // valid
 }
 
-int dmkTrackParser(SectorDescriptor_t *imageIndex, 
+int dmkImageParser(SectorDescriptor_t *imageIndex, 
         DMKImageHeader *dmkImageHeader, userParameters_t *tuserParameters) {
     int i = 0, result, j = 0;
     int trackCount = 0;
     int crcCheckErrors = 0;
-    unsigned char bootSectorSignature[3];
     
     DMKTrackHeader dt1h;
-    DMKTrackHeader *dmkTrack1Header = &dt1h;
+    DMKTrackHeader *dmkTrackHeader = &dt1h;
     unsigned char sd[DMK_RAW_SECTOR_SIZE];
     unsigned char *sectorData = &sd[0];
 
@@ -555,41 +537,42 @@ int dmkTrackParser(SectorDescriptor_t *imageIndex,
     int imageLevelSingleByte = dmkImageHeader->options & DMK_SINGLE_DENSITY_SINGLE_BYTE;
     int sectorLevelSingleByte = imageLevelSingleByte;
     unsigned short trackLength = dmkImageHeader->trackLengthLSB + 
-    dmkImageHeader->trackLengthMSB * 256;
+        dmkImageHeader->trackLengthMSB * 256;
+    logger(DEBUG, "DMK header track count: %d\n", dmkImageHeader->tracks);
 
     for (trackCount = 0; trackCount < dmkImageHeader->tracks; trackCount++) {
         long trackHeaderLocation = sizeof(DMKImageHeader) + trackLength * trackCount;
         logger(TRACE, "---- Track %d: %05X ----\n", trackCount, trackHeaderLocation);
-        result = readFromImage(dmkTrack1Header, trackHeaderLocation, sizeof(DMKTrackHeader), tuserParameters);
+        result = readFromImage(dmkTrackHeader, trackHeaderLocation, sizeof(DMKTrackHeader), tuserParameters);
 
         for (i = 0; i < DMK_SECTOR_POINTERS_IN_HEADER; i++) {
-            sectorPointer = dmkTrack1Header->revRpointer[i].sectorPointerLSB + 
-                    (dmkTrack1Header->revRpointer[i].sectorPointerMSB & DMK_SECTOR_POINTER_MSB_MASK) * 256;
-            rawSectorPointer = dmkTrack1Header->revRpointer[i].sectorPointerLSB + 
-                    dmkTrack1Header->revRpointer[i].sectorPointerMSB * 256;
-            doubleDensity = (dmkTrack1Header->revRpointer[i].sectorPointerMSB & DMK_DOUBLE_DENSITY_SECTOR);
-            sectorLevelSingleByte = dmkTrack1Header->revRpointer[i+1].sectorPointerMSB & DMK_DOUBLE_DENSITY_SECTOR;
+            sectorPointer = dmkTrackHeader->revRpointer[i].sectorPointerLSB + 
+                    (dmkTrackHeader->revRpointer[i].sectorPointerMSB & DMK_SECTOR_POINTER_MSB_MASK) * 256;
+            rawSectorPointer = dmkTrackHeader->revRpointer[i].sectorPointerLSB + 
+                    dmkTrackHeader->revRpointer[i].sectorPointerMSB * 256;
+            doubleDensity = (dmkTrackHeader->revRpointer[i].sectorPointerMSB & DMK_DOUBLE_DENSITY_SECTOR);
+            sectorLevelSingleByte = dmkTrackHeader->revRpointer[i+1].sectorPointerMSB & DMK_DOUBLE_DENSITY_SECTOR;
             if (i < DMK_SECTOR_POINTERS_IN_HEADER - 1) {
-                nextSectorPointer = dmkTrack1Header->revRpointer[i+1].sectorPointerLSB + 
-                    (dmkTrack1Header->revRpointer[i+1].sectorPointerMSB & 0x3F) * 256; 
+                nextSectorPointer = dmkTrackHeader->revRpointer[i+1].sectorPointerLSB + 
+                    (dmkTrackHeader->revRpointer[i+1].sectorPointerMSB & 0x3F) * 256; 
             }
             if (sectorPointer == 0) {
                 logger(TRACE, "highest sector is %d\n", i);
                 break;
             }
-            logger(TRACE, "Sector pointer(0x%04X + 0x%05X): 0x%04X, Density: %s - ", 
-                    rawSectorPointer, trackHeaderLocation, sectorPointer + trackHeaderLocation, (doubleDensity) ? "double" : "single");
+            logger(TRACE, "Sector header pointer(0x%04X + 0x%05X): 0x%04X, Density: %s - ", 
+                    sectorPointer, trackHeaderLocation, sectorPointer + trackHeaderLocation, (doubleDensity) ? "double" : "single");
             readFromImage(sectorData, sectorPointer + trackHeaderLocation, DMK_RAW_SECTOR_SIZE, tuserParameters);
             if (doubleDensity) { // The double byte issue is only for single density
                 logger(TRACE, "Copying single byte DD sector\n");
-                dmkUnDoubler(sectorData, singledSectorData, DMK_RAW_SECTOR_SIZE, 1);
+                dataUnDoubler(sectorData, singledSectorData, DMK_RAW_SECTOR_SIZE, 1);
             } else {
                 if (sectorLevelSingleByte) { // 
                     logger(TRACE, "Copying single byte SD sector\n");
-                    dmkUnDoubler(sectorData, singledSectorData, DMK_RAW_SECTOR_SIZE, 1);
+                    dataUnDoubler(sectorData, singledSectorData, DMK_RAW_SECTOR_SIZE, 1);
                 } else {
                     logger(TRACE, "Reducing double byte SD sector\n");
-                    dmkUnDoubler(sectorData, singledSectorData, DMK_RAW_SECTOR_SIZE, 2);
+                    dataUnDoubler(sectorData, singledSectorData, DMK_RAW_SECTOR_SIZE, 2);
                 }
             }
             int realSectorSize = 128<<singledSectorData[dmkRawSector[DMK_RAW_SECTOR_INDEX_EN]];
@@ -602,12 +585,14 @@ int dmkTrackParser(SectorDescriptor_t *imageIndex,
             logger(TRACE, "(Loc DAM: %d, Data: %d, DAMcrc: %d %d) ", 
                     dmkRawSector[DMK_RAW_SECTOR_INDEX_DM], dmkRawSector[DMK_RAW_SECTOR_INDEX_DAT],
                     dmkRawSector[DMK_RAW_SECTOR_INDEX_DCM], dmkRawSector[DMK_RAW_SECTOR_INDEX_DCL]);
+//            logger(TRACE, "(Loc Data: 0x%05X)\n", 
+//                    trackHeaderLocation + sectorPointer + dmkRawSector[DMK_RAW_SECTOR_INDEX_DAT]);
 
             dmkIndexSectorData(singledSectorData, &dmkRawSector[0], &imageIndex[j]); 
             crcCheckErrors += dmkGetCRCErrorScore(singledSectorData, &dmkRawSector[0], doubleDensity);
 
             long sectorDataLocation = 
-            sectorPointer + trackHeaderLocation + dmkRawSector[DMK_RAW_SECTOR_INDEX_DAT] * (sectorLevelSingleByte ? 1 : 2);
+                trackHeaderLocation + sectorPointer + dmkRawSector[DMK_RAW_SECTOR_INDEX_DAT];
             imageIndex[j].sectorLocation = sectorDataLocation;
             if (doubleDensity) {
                 imageIndex[j].flags += SD_DOUBLE_DENSITY;
@@ -623,41 +608,6 @@ int dmkTrackParser(SectorDescriptor_t *imageIndex,
         }
     }
     return crcCheckErrors;
-}
-
-int dmkCheckGeometricSanity(SectorDescriptor_t *imageIndex) {
-    int dii;
-    int trackHighCount = 0;
-    int sectorHighCount = 0;
-    int sideHighCount = 0;
-    for (dii = 0; dii < DMK_II_SECTORMAX; dii++) {
-        if (imageIndex[dii].sectorLocation == 0) break;
-        logger(BYTES, "Index: %d; Tr: %d; Sd: %d; Sc: %d; Location: %05X; Flags %X\n", 
-                dii,
-                imageIndex[dii].track, 
-                imageIndex[dii].side, 
-                imageIndex[dii].sector, 
-                imageIndex[dii].sectorLocation, 
-                imageIndex[dii].flags);
-        if (imageIndex[dii].track > trackHighCount) trackHighCount = imageIndex[dii].track;
-        if (imageIndex[dii].sector > sectorHighCount) sectorHighCount = imageIndex[dii].sector;
-        if (imageIndex[dii].side > sideHighCount) sideHighCount = imageIndex[dii].side;
-    }
-    logger(TRACE, "Track max: %d, Side max: %d, Sector max: %d\n", trackHighCount, sideHighCount, sectorHighCount);
-    
-    if (trackHighCount >= MINIMUM_TRACKS && 
-            trackHighCount < MAXIMUM_TRACKS && 
-            sectorHighCount < MAXIMUM_SECTORS && 
-            sideHighCount < MAXIMUM_SIDES) {
-        logger(WARN, "Image is a ");
-        logger(DEBUG, "%s Sided ", (imageIndex[dii].side > 0) ? "Double" : "Single");
-        logger(ERROR, "DMK");
-        logger(WARN, " image");
-        logger(DEBUG, " with %d tracks and %d sectors (MAX) per track.", trackHighCount + 1, sectorHighCount + 1);
-        logger(ERROR, "\n");
-        return 1; // only sane values found for a normal disk.
-    }
-    return 0; // insane values
 }
 
 void dmkIndexSectorData(unsigned char *data, int *sectorIndex, SectorDescriptor_t *imageIndex) {
@@ -706,66 +656,6 @@ int dmkGetCRCErrorScore(unsigned char *data, int *dmkSectorIndex, int doubleDens
     return crcErr;
 }
 
-int getSector(unsigned char *data, SectorDescriptor_t *sectorParams, 
-        SectorDescriptor_t *imageIndex, userParameters_t *tuserParameters) {
-    unsigned char rdt[MAX_SECTOR_SIZE * 2];
-    unsigned char *rawData = &rdt[0];
-    int doubleBytes;
-    
-    getSectorLocation(sectorParams, imageIndex);
-    doubleBytes = sectorParams->flags & DMK_DATA_DOUBLER_MASK;
-    logger(TRACE, "Found track %d, sector %d, side %d, fl %02X at location %05X\n", 
-            sectorParams->track, sectorParams->sector, sectorParams->side, sectorParams->flags, sectorParams->sectorLocation);
-    
-    if (doubleBytes) {
-        readFromImage(rawData, sectorParams->sectorLocation, TRSDOS_SECTOR_SIZE * 2, tuserParameters);
-        logger(DEBUG, "sector reduced:\n");
-        dmkUnDoubler(rawData, data, (TRSDOS_SECTOR_SIZE * 2), 2);
-    } else {
-        readFromImage(rawData, sectorParams->sectorLocation, TRSDOS_SECTOR_SIZE, tuserParameters);
-        logger(DEBUG, "sector copied:\n");
-        dmkUnDoubler(rawData, data, TRSDOS_SECTOR_SIZE, 1);
-    }
-    return 0;
-}
-
-void logBinaryBlock(int logLevel, unsigned char *data, int size) {
-#define BYTES_PER_LINE 16
-    int i, lineCount;
-    int halfWay = BYTES_PER_LINE / 2 - 1; // ugly off-by-one
-    char textPart[BYTES_PER_LINE + 1];
-    textPart[BYTES_PER_LINE] = 0;       // end of string
-    int lines = size / BYTES_PER_LINE;
-    for (lineCount = 0; lineCount < size; lineCount += BYTES_PER_LINE) {
-        logger(logLevel, "%04X: ", lineCount);
-        for (i = 0; i < BYTES_PER_LINE; i++) {
-            logger(logLevel, "%02X %s", data[lineCount + i], (i == halfWay) ? " " : "");
-            if (data[lineCount + i] >= ' ' && data[lineCount + i] <= '~') {
-                textPart[i] = data[lineCount + i];
-            } else {
-                textPart[i] = '.';
-            }
-        }
-        logger(logLevel, ":  %s", textPart);
-        logger(logLevel, "\n");
-    }
-}
-
-int getSectorLocation(SectorDescriptor_t *tSectorParams, SectorDescriptor_t *dmkImageIndex) {
-    int i;
-    tSectorParams->sectorLocation = 0;
-    for (i = 0; i < DMK_II_SECTORMAX; i++) {
-        if (tSectorParams->track == dmkImageIndex[i].track && 
-                tSectorParams->sector == dmkImageIndex[i].sector && tSectorParams->side == dmkImageIndex[i].side) {
-            logger(TRACE, "Found tr/sd/sc %d/%d/%d at %05X, index:%d\n", dmkImageIndex[i].track, dmkImageIndex[i].side, 
-                    dmkImageIndex[i].sector, dmkImageIndex[i].sectorLocation, i);
-            tSectorParams->sectorLocation = dmkImageIndex[i].sectorLocation;
-            tSectorParams->flags          = dmkImageIndex[i].flags;
-            return 1;
-        }
-    }
-    return 0; // sector not found
-}
 
 int checkCRC(unsigned char *data, int size, unsigned short crc, int doubleDensity) {
     int i;
@@ -801,44 +691,6 @@ unsigned short findOneOfThem(unsigned char *data, int dataSize, int startOffset,
     return 0;
 }
 
-void dmkUnDoubler(unsigned char *doubledData, unsigned char *singledData, int size, int interval) {
-    int i;
-    if (interval < 1) interval = 1;
-    if (interval >  2) interval = 2;
-    int range = size / interval;
-    int offset = interval - 1;
-    
-    for (i = 0; i < range; i++) {
-        singledData[i] = doubledData[i * interval + offset];
-//        logger(BYTES, "%02X ", singledData[i]);
-    }
-//    logger(BYTES, "\n");  
-    logBinaryBlock(BYTES, singledData, range);
-}
-
-int openImage(userParameters_t *tuserParameters) {
-    logger(DEBUG, "Opening %s\n", tuserParameters->imageFile);
-    tuserParameters->fileHandle = fopen(tuserParameters->imageFile, "rb");
-    if (tuserParameters->fileHandle == NULL) {
-        logger(ERROR, "Some error with opening %s. Exiting...\n", tuserParameters->imageFile);
-        perror(tuserParameters->imageFile);
-        return(0);
-    }
-    logger(DEBUG, "Image file: \'%s\', opened ok.\n", tuserParameters->imageFile);
-    return(1);
-}
-
-void closeImage(userParameters_t* tuserParameters) {
-    fclose(tuserParameters->fileHandle);
-    tuserParameters->fileHandle = NULL;
-}
-
-void shutdown(userParameters_t* tuserParameters) {
-    if (tuserParameters->fileHandle != NULL) {
-        closeImage(tuserParameters);
-    }
-}
-
 int charArrCheck(char *data1, char *data2, int size) {
     int i;
     for (i = 0; i < size; i++) {
@@ -847,11 +699,6 @@ int charArrCheck(char *data1, char *data2, int size) {
         }
     }
     return 1;
-}
-
-int getImageSize(userParameters_t* tuserParameters) {
-    fseek(tuserParameters->fileHandle, 0, SEEK_END);
-    return ftell(tuserParameters->fileHandle);
 }
 
 void jv3Flags(int logLevel, unsigned char flags) {
@@ -890,45 +737,37 @@ void jv3Flags(int logLevel, unsigned char flags) {
     logger(logLevel, ")");
 }
 
-static int threshold = 1;
+void showDir(SectorDescriptor_t *sectorParams, SectorDescriptor_t *imageIndex, userParameters_t *userParameters) {
+    unsigned char dt[TRSDOS_SECTOR_SIZE];    
+    unsigned char *data = &dt[0];
+    int sectorsPerTrack = getSectorCountTrackSide(sectorParams, imageIndex);
 
-void setLogLevel(int level) {
-    threshold = level;
-}
+    sectorParams->side   = 0;
+    sectorParams->sector = DIR_GAT_SECTOR;
+    getSectorLocation(sectorParams, imageIndex);
+    getSector(data, sectorParams, userParameters);
 
-void logger(int level, const char *fmt, ...)
-{
-  va_list args;
-  if (level <= threshold) {
-    va_start(args, fmt);
-    vfprintf(stdout, fmt, args);
-    va_end(args);
-  }
-}
+    getSectorLocation(sectorParams, imageIndex);
+    getSector(data, sectorParams, userParameters);
+    showGAT(INFO, data, TRSDOS_SECTOR_SIZE);
 
-int readFromImage(void *data, long location, int size, userParameters_t *tuserParameters) {
-    int result;
-    logger(TRACE, "Reading %d bytes at location %05X\n", size, location);
-    
-    result = fseek(tuserParameters->fileHandle, location, SEEK_SET);
-    if (result != 0) {
-        logger(ERROR, "Error during fseek on file: got %d\n", result);
-        return(0);        
+    sectorParams->sector = DIR_HIT_SECTOR;
+    getSectorLocation(sectorParams, imageIndex);
+    getSector(data, sectorParams, userParameters);
+    showHIT(INFO, data, TRSDOS_SECTOR_SIZE, sectorsPerTrack);
+
+    int d;
+    logger(INFO, "\nDirectory sectors %d - %d\n", DIR_FIRST_ENTRY_SECTOR, sectorsPerTrack);
+    logger(INFO, "Ac          Ov Ef Rl  Filename/Ext Hash UpPw AcPw EOFs   G1    G2    G3    G4  FXDE\n");
+    for (d = DIR_FIRST_ENTRY_SECTOR; d < sectorsPerTrack; d++) {
+        sectorParams->sector = d;
+        getSectorLocation(sectorParams, imageIndex);
+        getSector(data, sectorParams, userParameters);
+//                logBinaryBlock(INFO, data, TRSDOS_SECTOR_SIZE); 
+        logger(INFO, "Sector %d:\n", d);
+        showDirSector(INFO, data, TRSDOS_SECTOR_SIZE);
     }
     
-    result = fread(data, sizeof(char), size, tuserParameters->fileHandle);    
-    if (result != size) {
-        logger(TRACE, "Error reading bytes file: got %d, not %d\n", result, size);
-        return(0);
-    }
-    
-    unsigned char *myData = data;
-    
-    #define LOCALMAX 600
-    int mySize = size < LOCALMAX ? result : LOCALMAX;
-    logBinaryBlock(BYTES, myData, mySize); 
-    
-    return 1;
 }
 
 void showGAT(int logLevel, unsigned char *data, int size) {
@@ -946,6 +785,7 @@ void showGAT(int logLevel, unsigned char *data, int size) {
     int i, j;
     int granuleLockout;
     int freeDiskSpace = 0;
+    logger(logLevel, "\n");
     logger(logLevel, "GAT (# = used, _ = free):\n");
     for (i = 0; i < GAT_TRACKS; i++) {
         logger(logLevel, "%2d (%02X)", i, data[i]);
@@ -982,7 +822,7 @@ void showGAT(int logLevel, unsigned char *data, int size) {
     logger(logLevel, "%s %s\n", diskLabel, diskDate);
 }
 
-void showHIT(int logLevel, unsigned char *data, int size, DiskProperties_t *diskProperties) {
+void showHIT(int logLevel, unsigned char *data, int size, int sectorsPerTrackSide) {
 #define HASH_REGION_SIZE     0x08
 #define HASH_REGION_INTERVAL 0x20
 #define HASH_SIZE            0x02
@@ -990,11 +830,11 @@ void showHIT(int logLevel, unsigned char *data, int size, DiskProperties_t *disk
 #define FIRST_ENTRY_SECTOR   0x02
     
     int i, j;
-    int directoryEntrySectors = diskProperties->track1SectorCount - FIRST_ENTRY_SECTOR;
+    int directoryEntrySectors = sectorsPerTrackSide - FIRST_ENTRY_SECTOR;
     int regionCount;
     logger(logLevel, "HIT file hashes:\n");
 //    logger(logLevel, "S2 S3  4  5  6  7  8  9\n");
-    for (j = 2; j < diskProperties->track1SectorCount; j++) logger(logLevel, "%2d ", j);
+    for (j = FIRST_ENTRY_SECTOR; j < sectorsPerTrackSide; j++) logger(logLevel, "%2d ", j);
     logger(logLevel, "\n");
     for (regionCount = 0; regionCount < HASH_COUNT; regionCount++) {
 //        logger(logLevel, "Sector %d: ", FIRST_ENTRY_SECTOR + regionCount);
@@ -1005,7 +845,7 @@ void showHIT(int logLevel, unsigned char *data, int size, DiskProperties_t *disk
     }
 }
 
-void showDIR(int logLevel, unsigned char *data, int size) {
+void showDirSector(int logLevel, unsigned char *data, int size) {
     
     directoryEntry_t de;
     directoryEntry_t *directoryEntry = &de;
@@ -1094,44 +934,4 @@ DONE
         
         */
 
-void cleanImageIndex(SectorDescriptor_t *imageIndex) {
-    int i;
-    
-    for (i = 0; i < II_SECTORMAX; i++) {
-        imageIndex[i].track  = 255;
-        imageIndex[i].sector = 255;
-        imageIndex[i].side   = 255;
-        imageIndex[i].flags  = 0;
-        imageIndex[i].sectorLocation = 0;
-    }
-}
 
-void getDiskProperties(DiskProperties_t *diskProperties, SectorDescriptor_t *imageIndex) {
-    int i;
-    int logLevel = TRACE;
-    diskProperties->track0SectorCount = 0;
-    diskProperties->track0SectorSize  = 0;
-    diskProperties->track1SectorCount = 0;
-    diskProperties->track1SectorSize  = 0;
-    diskProperties->sideCount  = 0;
-    diskProperties->trackCount = 0;
-    
-    for (i = 0; i < II_SECTORMAX; i++) {
-       logger(logLevel, "%3d: tr/sd/sc/fl %2d/%2d/%2d/%02X at %05X.\n", i, imageIndex[i].track, imageIndex[i].side, 
-                    imageIndex[i].sector, imageIndex[i].flags, imageIndex[i].sectorLocation);
-        if (imageIndex[i].track == 255 && imageIndex[i].sector == 255) break;
-        if (imageIndex[i].track == 0) diskProperties->track0SectorCount++;
-        if (imageIndex[i].track == 1) diskProperties->track1SectorCount++;
-        if ((imageIndex[i].side  + 1) > diskProperties->sideCount)  diskProperties->sideCount  = imageIndex[i].side  + 1;
-        if ((imageIndex[i].track + 1) > diskProperties->trackCount) diskProperties->trackCount = imageIndex[i].track + 1;
-        if (imageIndex[i].track == 0 && imageIndex[i].sector == 0 && imageIndex[i].side == 0)
-            diskProperties->track0SingleDensity = (imageIndex[i].flags & SD_DOUBLE_DENSITY) ? 0 : 1;
-        if (imageIndex[i].track == 1 && imageIndex[i].sector == 0 && imageIndex[i].side == 0)
-            diskProperties->track1SingleDensity = (imageIndex[i].flags & SD_DOUBLE_DENSITY) ? 0 : 1; 
-    }
-    logger(INFO, "Image has %d tracks, %d sides.\n", diskProperties->trackCount, diskProperties->sideCount);
-    logger(INFO, "Track 0: %d sectors, %s density.\n", 
-            diskProperties->track0SectorCount, (diskProperties->track0SingleDensity) ? "Single" : "Double");
-    logger(INFO, "Track 1: %d sectors, %s density.\n", 
-            diskProperties->track1SectorCount, (diskProperties->track1SingleDensity) ? "Single" : "Double");
-}

@@ -13,6 +13,15 @@ usage: -d display directory tracks
                          0 - ERROR; 1 - WARN; 2 - INFO; 3 - DEBUG; 4 - TRACE; 5 - BYTES 5
        -?              - help and version
 
+New in 0.8:
+- implemented check for NewDOS/80 PDRIVE data.
+- fixed a bug corrupting the sector address in some cases.
+- generalized the image index parsing, removing a lot of redundant code in main.
+- split the main file according to the perceived layers of the program. More is 
+  expected in later versions.
+- Added some more boot sector signatures.
+- Shuffled the log level if some messages. Still more work to do.
+
 New in 0.7:
 - implemented technical GAT, HIT and directory entry listings (-d option). Just for 
   the basic SD, SS TRSDOS 2.3 compatible disks.

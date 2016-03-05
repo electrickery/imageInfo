@@ -22,5 +22,8 @@ void setLogLevel(int level);
 
 void logger(int level, const char *fmt, ...);
 
+void logBinaryBlock(int logLevel, unsigned char *data, int size);
+
+
 #endif	/* LOGGER_H */
 

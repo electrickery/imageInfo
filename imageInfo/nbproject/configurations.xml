@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="79">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
+    <df name="imageInfo" root=".">
+      <df name="dist">
+        <df name="Debug">
+          <df name="GNU-Linux-x86">
+          </df>
+        </df>
+      </df>
+      <in>crc.c</in>
+      <in>crc.h</in>
+      <in>dmk.h</in>
+      <in>imageFile.c</in>
+      <in>imageFile.h</in>
+      <in>imageIndex.c</in>
+      <in>imageIndex.h</in>
+      <in>imageInfo.c</in>
+      <in>imageInfo.h</in>
+      <in>imageSignatures.h</in>
+      <in>jv3.h</in>
+      <in>logger.c</in>
+      <in>logger.h</in>
+      <in>newdos.c</in>
+      <in>newdos.h</in>
+      <in>trsdos.h</in>
+    </df>
+    <logicalFolder name="ExternalFiles"
+                   displayName="Important Files"
+                   projectFiles="false"
+                   kind="IMPORTANT_FILES_FOLDER">
+      <itemPath>Makefile</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <sourceFolderFilter>^(nbproject)$</sourceFolderFilter>
+  <sourceRootList>
+    <Elem>.</Elem>
+  </sourceRootList>
+  <projectmakefile>Makefile</projectmakefile>
+  <confs>
+    <conf name="Default" type="0">
+      <toolsSet>
+        <remote-sources-mode>LOCAL_SOURCES</remote-sources-mode>
+        <compilerSet>default</compilerSet>
+      </toolsSet>
+      <makefileType>
+        <makeTool>
+          <buildCommandWorkingDir>.</buildCommandWorkingDir>
+          <buildCommand>${MAKE} -f Makefile</buildCommand>
+          <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>
+          <executablePath></executablePath>
+        </makeTool>
+      </makefileType>
+    </conf>
+  </confs>
+</configurationDescriptor>

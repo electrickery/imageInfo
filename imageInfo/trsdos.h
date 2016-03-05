@@ -8,9 +8,7 @@
 #ifndef TRSDOS_H
 #define	TRSDOS_H
 
-#ifdef	__cplusplus
-extern "C" {
-#endif
+
 
 //    from: http://www.classiccmp.org/cpmarchives/trs80/mirrors/kjsl/www.kjsl.com/trs80/mod1ldos.html
 //DIR+0     This byte contains the attributes of the file.
@@ -105,7 +103,7 @@ extern "C" {
 #define DIR_ENTRY_ACCESS_CONTROL 0
 #define DIR_ENTRY_OVERFLOW       1
 #define DIR_ENTRY_EOF_BYTE_OFFSET 2
-#define DIR_ENTRY_RECORD_LENGTH  4            
+#define DIR_ENTRY_RECORD_LENGTH  4
 #define DIR_ENTRIES_PER_SECTOR   8
 #define DIR_ENTRY_NAME_START     5
 #define DIR_ENTRY_NAME_SIZE      8
@@ -117,6 +115,7 @@ extern "C" {
 #define DIR_HIT_SECTOR           1
 #define DIR_FIRST_ENTRY_SECTOR   2
 #define DIR_SECTORS_TRSDOS23    10
+    
 
 typedef struct {
     unsigned char track;            // Lump number in which  the file starts (from 0)
@@ -181,9 +180,7 @@ const char *daAccess[8] = { "KCNRWX", "-CNRWX", "--NRWX", "unused", "---RWX", "-
 #define DIR_FXDE_ENTRY_MASK   0xE0
 
 
-#ifdef	__cplusplus
-}
-#endif
+
 
 #endif	/* TRSDOS_H */
 
