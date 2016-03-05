@@ -35,76 +35,69 @@
 #if linux
 #include <sys/io.h>
 #endif
+#include "dataStructs.h"
 #include "dfiProcess.h"
-//#include "dmk.h"
+#include "kind.h"
+#include "crc.h"
+#include "logger.h"
+#include "decoder.h"
 
 int fd_img; 
 struct trackHeader trackHeader;
-//int uencoding;  // user set encoding
-userParameters_t ups;
-userParameters_t *userParameters = &ups;
-
-track_t tt;
-track_t *track = &tt;
-
-int dmk_iam_pos = -1;
-int dmk_ignore = 0;
-int cylseen = -1;
-
-/*
- * 
- */
 
 void openImage(char *dImage) {
     fd_img = open(dImage, O_RDONLY);
     if (fd_img == -1) {
-        printf("Some error with opening %s. Exiting...\n", dImage);
+        logger(LOUT_ERRORS, "Some error with opening %s. Exiting...\n", dImage);
         perror(dImage);
         exit(2);
     }
-
-    printf("Image file: \'%s\', (fd: %d) opened ok.\n", dImage, fd_img);
+    logger(LOUT_DEBUG, "Image file: \'%s\', (fd: %d) opened ok.\n", dImage, fd_img);
 }
 
-int checkImageHeader() {
+int checkImageHeader(void) {
     int err;
     int headerSize = 4;
     char data[headerSize];
     char* header = "DFE2";
     
-    if(lseek(fd_img, 0, 0)==-1);
+    lseek(fd_img, 0, 0);
     
     err = read(fd_img, data, headerSize);
     if (err < 0) {
-        printf("  checkImageHeader; err=%d\n", err);
+        logger(LOUT_ERRORS, "  checkImageHeader; err=%d\n", err);
         return err;
     }
     if (err < headerSize) {
-        printf("  checkImageHeader; file too short: %d bytes\n", err);
+        logger(LOUT_ERRORS, "  checkImageHeader; file too short: %d bytes\n", err);
     }
     if (strcmp(data, header) != 0) {
-        printf("  checkImageHeader; file header mismatch '%s'\n", data);
+        logger(LOUT_ERRORS, "  checkImageHeader; file header mismatch '%s'\n", data);
         return(0);
     }
-    printf("  checkImageHeader; file header ok.\n");
+    logger(LOUT_DEBUG, "  checkImageHeader; file header ok.\n");
     return(1);
 }
 
-unsigned int processTrackHeader(unsigned int pos) {
+unsigned int processTrackHeader(unsigned int pos, track_t *ttrack) {
     int trackHeaderSize = 10; // sizeof(trackHeader); the reported size is 12 bytes, not 10!
     
     unsigned char data[trackHeaderSize];
     int err;
     
-    if(lseek(fd_img, pos, 0)==-1);
+    lseek(fd_img, pos, 0);
     
     err = read(fd_img, data, trackHeaderSize);
     if (err < 0) {
-        printf("  processTrackHeader; err=%d\n", err);
+        logger(LOUT_ERRORS, "  processTrackHeader; err=%d\n", err);
         return err;
     }
+    if (err == 0) {
+        logger(LOUT_DEBUG, "  processTrackHeader; End of file\n");
+        exit(0);
+    }
     if (err < trackHeaderSize) {
-        printf("  processTrackHeader; file too short: %d bytes\n", err);
+        logger(LOUT_ERRORS, "  processTrackHeader; file too short: %d bytes\n", err);
         return(0);
     }
     trackHeader.track     = (data[0] << 8) + data[1];
@@ -112,10 +105,10 @@ unsigned int processTrackHeader(unsigned int pos) {
     trackHeader.sector    = (data[4] << 8) + data[5];
     trackHeader.trackSize = (data[6] << 24) + (data[7] << 16) + (data[8] << 8) + data[9];
     
-    track->hardwareTrack = trackHeader.track;
-    track->hardwareSide  = trackHeader.head;
+    ttrack->hardwareTrack = trackHeader.track;
+    ttrack->hardwareSide  = trackHeader.head;
     
-    printf("  processTrackHeader; track: %hd, head: %hd, sector: %hd, trackSize: %08X\n", 
+    logger(LOUT_DEBUG, "  processTrackHeader; track: %hd, head: %hd, sector: %hd, trackSize: %08X\n", 
             trackHeader.track, 
             trackHeader.head,
             trackHeader.sector,
@@ -130,36 +123,39 @@ void initHistArray(histoGraph_t *hist) {
     }
 }
 
-void trackSummary(track_t *track) {
+void trackSummary(track_t *ttrack) {
     int i = 0;
     int j;
 //    int k;
 //    int size;
-    printf("  processTrack; Track summary:\n");
-    printf("                track: %d\n", track->hardwareTrack);
-    printf("                 side: %d\n", track->hardwareSide);
-//    printf("           index mark: %02x\n", track->indexMark);
-    printf("         sector order: ");
-    while (track->sectorOrder[i] != -1 && i < MAXSECTORSIZE) {
-        printf("%d, ", track->sectorOrder[i]);
+//    logger(LOUT_TSUMMARY, " trackSummary; ");
+    logger(LOUT_TSUMMARY, " trackSummary; ");
+    logger(LOUT_TSUMMARY, " track: %d", ttrack->hardwareTrack);
+    logger(LOUT_TSUMMARY, " side: %d", ttrack->hardwareSide);
+    while (ttrack->sectorOrder[i] != -1 && i < MAXSECTORSIZE) { i++; }
+    logger(LOUT_TSUMMARY, " sectors: %d", i);
+    i = 0;
+    logger(LOUT_TSUMMARY, " order: ");
+    while (ttrack->sectorOrder[i] != -1 && i < MAXSECTORSIZE) {
+        logger(LOUT_TSUMMARY, "%d, ", ttrack->sectorOrder[i]);
         i++;
     }
-    printf("\n");
+    logger(LOUT_TSUMMARY, "\n");
     for (j = 0; j < i; j++) { // i points to the first not used sector
-        printf("  sector %d: enc=%d idam=%02x cyl=%d side=%d sec=%d size=%d icrc=%02x %02x",
-            j, 
-            track->sector[j].encoding,
-            track->sector[j].idam,
-            track->sector[j].track,
-            track->sector[j].head,
-            track->sector[j].sector,
-            track->sector[j].sectorSize,
-            track->sector[j].idam_crc1,
-            track->sector[j].idam_crc2);
-        printf(" dam=%02x crc=%02x %02x\n", 
-            track->sector[j].dam,
-            track->sector[j].data_crc1,
-            track->sector[j].data_crc2);
+        logger(LOUT_SSUMMARY, "  sector: size=%d idam=%02x cyl=%d side=%d sec=%d enc=%d icrc=%02x %02x",
+//            j, 
+            ttrack->sector[j].sectorSize,
+            ttrack->sector[j].idam,
+            ttrack->sector[j].track,
+            ttrack->sector[j].head,
+            ttrack->sector[j].sector,
+            ttrack->sector[j].encoding,
+            ttrack->sector[j].idam_crc1,
+            ttrack->sector[j].idam_crc2);
+        logger(LOUT_SSUMMARY, " dam=%02x crc=%02x %02x\n", 
+            ttrack->sector[j].dam,
+            ttrack->sector[j].data_crc1,
+            ttrack->sector[j].data_crc2);
 /*
         size = secsize(track->sector[j].sectorSize, track->sector[j].encoding);
         for (k = 0; k < size; k++) {
@@ -178,10 +174,10 @@ int findIndex(int *sectorOrder, int value, int max) {
     return -1;
 }
 
-FILE* openDumpFile(char *fileName) {
-    FILE *file = fopen(fileName, "wb");
+FILE* openDumpFile(userParameters_t *tuserParameters) {
+    FILE *file = fopen(tuserParameters->imageFile, "wb");
     if (file == NULL) {
-      perror(userParameters->imageFile);
+      logger(LOUT_ERRORS, "  openDumpFile; error opening %s\n", tuserParameters->imageFile);
     }    
     return file;
 }
@@ -190,84 +186,135 @@ void closeDumpFile(FILE *file) {
     fclose(file);
 }
 
-void jv1Dump(track_t *track, userParameters_t *userParameters) {
+void jv1Dump(track_t *ttrack, userParameters_t *tuserParameters) {
     int i = 0;
     int j;
     int size;
-    printf("Dumping to %s\n", userParameters->imageFile);
+    logger(LOUT_DEBUG, "Dumping to %s\n", tuserParameters->imageFile);
     i = 0;
     while (i < MAXTRACKSECTORS) {
-        j = findIndex(track->sectorOrder, i, MAXTRACKSECTORS);
-        printf("Found sector %d at %d, ", i, j);
+        j = findIndex(ttrack->sectorOrder, i, MAXTRACKSECTORS);
         if (j != -1) {
-            size = secsize(track->sector[j].sectorSize, track->sector[j].encoding);
-            printf("dumping %d bytes", size);
-            fwrite(&track->sector[j].sectorData, size, 1, userParameters->fileHandle);
+            logger(LOUT_DEBUG, "Found sector %d at %d, ", i, j);
+            size = secsize(ttrack->sector[j].sectorSize, ttrack->sector[j].encoding);
+            logger(LOUT_DEBUG, "dumping %d bytes\n", size);
+            fwrite(&ttrack->sector[j].sectorData, size, 1, tuserParameters->fileHandle);
         }
-        printf("\n");
         i++;
     }
 }
 
-unsigned int processTrack(unsigned int pos, int silent) {
+int getSample (int dfiValue) {                 // either the carry tally is returned or -1 in case of an overflow value
+    static int carry = 0;
+    int tmpCarry;
+    if (dfiValue == -1) {
+        carry = 0;
+        return 0;
+    }
+    if (dfiValue == DFI_OVERFLOW) {             // overflow value, add to carry
+        carry += dfiValue;
+        return -1;
+    } else if (dfiValue > DFI_OVERFLOW) {       // index hole bit set
+        logger(LOUT_DEBUG, "  processTrack; index found!\n");
+        if (dfiValue == 0xFF) {                 // overflow & index hole bit, add to carry
+            carry += DFI_OVERFLOW;
+            return -1;
+        } else {                                // non-overflow & index hole bit
+            carry += dfiValue & DFI_OVERFLOW;
+        }
+    } else {                                    // non-overflow value
+        carry += dfiValue;
+    }
+    tmpCarry = carry;
+    carry = 0;
+    return tmpCarry;
+
+}
+
+int getLowest(histoGraph_t *histoGraph) {
+    int i;
+    int lowest = 0x7FFFFFFF; // assumed max int
+    for (i=0; i < histoGraph->histSize; i++) {
+        lowest = (histoGraph->hist[i] < lowest) ? histoGraph->hist[i] : lowest;
+    }
+    return lowest;
+}
+
+int getHighest(histoGraph_t *histoGraph) {
+    int i;
+    int highest = -1; // lower enough 
+    for (i=0; i < histoGraph->histSize; i++) {
+        highest = (histoGraph->hist[i] > highest) ? histoGraph->hist[i] : highest;
+    }
+    return highest;
+}
+
+int fillHistoGraph(histoGraph_t *histoGraph, char *dfiData, int trackSize) {
+    int i;
+    int samples = 0;
+    int carry = 0;
+    for (i = 0; i < trackHeader.trackSize - 1; i++) {
+         carry = getSample(dfiData[i]);
+         if (carry != -1) {
+            histoGraph->hist[carry & (histoGraph->histSize - 1)] += 1;
+            samples++;
+        }
+    }    
+    return samples;
+}
+
+unsigned int processTrack(unsigned int pos, int silent, 
+        track_t *ttrack, userParameters_t *tuserParameters) {
     if (!silent) {
-        int i, carry, err, printed;
-        int lowest, highest;
+        int i, carry, err, l1_samples;
+//        int lowest, highest;
         
-        process_bit(2); // Hack to re-initialize 
-        process_bit(3);
+        process_bit(2, NULL, 0); // Hack to re-initialize 
+        process_bit(3, NULL, 0);
         
         histoGraph_t hs;                   // make an instance
         histoGraph_t *histoGraph = &hs;    // pointerize it
         histoGraph->histSize = HISTSIZE;
         initHistArray(histoGraph);
         
-        char overflow      = 0x7F;
         int tresHoldFactor = 200;
         char dfiData[trackHeader.trackSize];
-        if(lseek(fd_img, pos, 0)==-1);
+        lseek(fd_img, pos, 0);
 
         err = read(fd_img, dfiData, trackHeader.trackSize);
         if (err < 0) {
-            printf("  processTrackHeader; err=%d\n", err);
+            logger(LOUT_ERRORS, "  processTrackHeader; err=%d\n", err);
             return err;
         }
         if (err < trackHeader.trackSize) {
-            printf("  processTrack; file too short: %d bytes\n", err);
+            logger(LOUT_ERRORS, "  processTrack; file too short: %d bytes\n", err);
             return(0);
         }
+        
+        l1_samples = fillHistoGraph(histoGraph, dfiData, trackHeader.trackSize);
+        printHist(histoGraph, (l1_samples/tresHoldFactor));
+        logger(LOUT_DEBUG, "Lowest value: %d, Highest value: %d\n", getLowest(histoGraph), getHighest(histoGraph));
 
         carry = 0;
-        printed = 0;
-        lowest = 0xFFFFFF;
-        highest = 0;
+//        lowest = 0xFFFFFF;
+//        highest = 0;
         for (i = 0; i < trackHeader.trackSize - 1; i++) {
-            if (dfiData[i] == overflow) {
-                carry += dfiData[i];
-            } else if (dfiData[i] > overflow) {
-                printf("  processTrack; index found!\n");
-            } else {
-                carry += dfiData[i];
-    //            printf("%03X, ", carry);
-                printed++;
-                lowest = (carry  < lowest)  ? carry : lowest;
-                highest = (carry > highest) ? carry : highest;
-                histoGraph->hist[carry & (histoGraph->histSize - 1)] += 1;
-                
-                process_sample(carry);
+            carry = getSample(dfiData[i]);
+            if (carry != -1) {
+                process_sample(carry, ttrack, tuserParameters);
                 carry = 0;
             }
-    //        printf("%02X, ", data[i]);
+            
+    //        msg(OUT_DEBUG, "%02X, ", data[i]);
         }
-        printf("\nValues printed: %d, lowest: %0X, highest: %0X\n", printed, lowest, highest);
+//        msg(OUT_DEBUG, "\nValues sampled: %d, lowest: %0X, highest: %0X\n", printed, lowest, highest);
 
-        printHist(histoGraph, (printed/tresHoldFactor));
-        printf("  processTrack; adding trackSize: %08X to pos: %08X\n", trackHeader.trackSize, pos);
+        logger(LOUT_DEBUG, "  processTrack; adding trackSize: %08X to pos: %08X\n", trackHeader.trackSize, pos);
         
-        trackSummary(track);
-        if (userParameters->imageType != -1) jv1Dump(track, userParameters);
+        trackSummary(ttrack);
+        if (tuserParameters->imageType != -1) jv1Dump(ttrack, tuserParameters);
     } else {
-        printf("  processTrack; skipping track\n");
+        logger(LOUT_DEBUG, "  processTrack; skipping track\n");
     }
     return(pos + trackHeader.trackSize);
 }
@@ -276,30 +323,39 @@ void printHist(histoGraph_t *hist, int printedTresHoldFactor) {
         int peakCount = 0;
         int inPeak = 0;
         int i;
+        logger(LOUT_DEBUG, "Histogram:\n");
         for (i = 0; i < hist->histSize; i++) {
             if (hist->hist[i] > (printedTresHoldFactor)) {
-                printf("%0X:%d,  ", i, hist->hist[i]);
+                logger(LOUT_DEBUG, "%0X:%d,  ", i, hist->hist[i]);
                 if (inPeak == 0) {
                     peakCount++;
                     inPeak = 1;
                 } 
             } else {
                 if (inPeak ==1)
-                    printf("|\n");
+                    logger(LOUT_DEBUG, "|\n");
 
                 inPeak = 0;
             }
         }   
-        printf("Peaks: %d\n", peakCount);
+        logger(LOUT_DEBUG, "Peaks: %d\n", peakCount);
 }
 
-void usage() {
+void usage(userParameters_t *tuserParameters) {
     printf(" usage; -d <dfiImageFile> : (mandatory)\n");
     printf("        -e encoding   1 = FM (SD), 2 = MFM (DD or HD), 3 = RX02\n");
     printf("        -f file name\n");
+    printf("        -i file type. Only 1, JV1 is supported\n");
+    printf("        -k   1 = %s\n", getKindDesc(0).description);
+    printf("             2 = %s\n", getKindDesc(1).description);
+    printf("             3 = %s\n", getKindDesc(2).description);
+    printf("             4 = %s\n", getKindDesc(3).description);
+    printf("             5 = %s\n", getKindDesc(4).description);
+    printf("             6 = %s\n", getKindDesc(5).description);
+    printf("             7 = %s\n", getKindDesc(6).description);
+    printf("             8 = %s\n", getKindDesc(7).description);
     printf("        -s : skip odd tracks in image\n");  
-    printf("        -t file type. Only 1, JV1 is supported\n");
-    printf("        -v verbosity  Amount of output [%d]\n", userParameters->out_level);
+    printf("        -v verbosity  Amount of output [%d]\n", tuserParameters->out_level);
     printf("               0 = No output\n");
     printf("               1 = Summary of disk\n");
     printf("               2 = + summary of each track\n");
@@ -311,33 +367,33 @@ void usage() {
     printf("               21 = level 2 to logfile, 1 to screen, etc.\n");
 }
 
-void scrubTrackBuffer(track_t *track) {
+void scrubTrackBuffer(track_t *ttrack) {
     int i,j;
-    track->hardwareTrack = -1;
-    track->hardwareSide = -1;
-    track->indexMark = -1;   
+    ttrack->hardwareTrack = -1;
+    ttrack->hardwareSide = -1;
+    ttrack->indexMark = -1;   
     for (i = 0; i < MAXTRACKSECTORS; i++) {
-        track->sectorOrder[i] = -1;
-        track->sector[i].encoding = -1,
-        track->sector[i].dam = -1;
-        track->sector[i].data_crc1 = -1;
-        track->sector[i].data_crc2 = -1;
-        track->sector[i].head = -1;
-        track->sector[i].idam = -1;
-        track->sector[i].idam_crc1 = -1;
-        track->sector[i].idam_crc2 = -1;
-        track->sector[i].number = -1;
-        track->sector[i].sector = -1;
-        track->sector[i].sectorSize = -1;
-        track->sector[i].track = -1;
+        ttrack->sectorOrder[i] = -1;
+        ttrack->sector[i].encoding = -1,
+        ttrack->sector[i].dam = -1;
+        ttrack->sector[i].data_crc1 = -1;
+        ttrack->sector[i].data_crc2 = -1;
+        ttrack->sector[i].head = -1;
+        ttrack->sector[i].idam = -1;
+        ttrack->sector[i].idam_crc1 = -1;
+        ttrack->sector[i].idam_crc2 = -1;
+        ttrack->sector[i].number = -1;
+        ttrack->sector[i].sector = -1;
+        ttrack->sector[i].sectorSize = -1;
+        ttrack->sector[i].track = -1;
         for (j = 0; j < MAXSECTORSIZE; j++) {
-            track->sector[i].sectorData[j] = 0;
+            ttrack->sector[i].sectorData[j] = 0;
         }
     }
 }
 
-void optionParse(int argc, char** argv) {
-    char *optstr = "d:e:f:st:hv:";
+void optionParse(int argc, char** argv, userParameters_t *tuserParameters) {
+    char *optstr = "d:e:f:i:k:shv:";
     char ch;
      while( -1 != (ch=getopt(argc,argv,optstr))) {
         switch(ch) {
@@ -345,40 +401,47 @@ void optionParse(int argc, char** argv) {
                 openImage(optarg);
                 break;
             case 'e':
-                userParameters->uencoding = strtol(optarg, NULL, 0);
-                if (userParameters->uencoding < FM || userParameters->uencoding > RX02) {
-                    printf("Encoding not valid: %d\n", userParameters->uencoding);
-                    usage();
+                tuserParameters->uencoding = strtol(optarg, NULL, 0);
+                if (tuserParameters->uencoding < FM || tuserParameters->uencoding > RX02) {
+                    printf("Encoding not valid: %d\n", tuserParameters->uencoding);
+                    usage(tuserParameters);
                     exit(1);
                 }
                 break;
             case 'f':
-                userParameters->imageFile = optarg;
+                tuserParameters->imageFile = optarg;
                 break;                
             case 'h':
-                usage();
+                usage(tuserParameters);
                 exit(1);
                 break;
-            case 's':
-                userParameters->skipTracks = 1;
+            case 'i':
+                tuserParameters->imageType = strtol(optarg, NULL, 0);
                 break;
-            case 't':
-                userParameters->imageType = strtol(optarg, NULL, 0);
+            case 'k':
+                tuserParameters->kind = strtol(optarg, NULL, 0);
+                if (tuserParameters->kind < 1 || tuserParameters->kind > 8) {
+                    usage(tuserParameters);
+                    exit(1);
+                }
+                break;
+            case 's':
+                tuserParameters->skipTracks = 1;
                 break;
             case 'v':
-                userParameters->out_level = strtol(optarg, NULL, 0);
-                if (userParameters->out_level < OUT_QUIET || userParameters->out_level > OUT_SAMPLES * 11) {
-                  usage();
+                tuserParameters->out_level = strtol(optarg, NULL, 0);
+                if (tuserParameters->out_level < LOUT_QUIET || tuserParameters->out_level > LOUT_SAMPLES * 11) {
+                  usage(tuserParameters);
                   exit(1);
                   break;
                 }
-                userParameters->out_file_level = userParameters->out_level / 10;
-                userParameters->out_level = userParameters->out_level % 10;
+                tuserParameters->out_file_level = tuserParameters->out_level / 10;
+                tuserParameters->out_level = tuserParameters->out_level % 10;
                 break;
             case '?':
             default:
                 printf(" main; error?  condition unaccounted for?\n");
-                usage();
+                usage(tuserParameters);
                 exit(1);
                 break;
         }
@@ -390,618 +453,73 @@ int main(int argc, char** argv) {
     int silentTrack;
     int pos = 4; /* fileHeaderSize */
 //    int skipOddTracks = 0;
+    
+    userParameters_t ups;
+    userParameters_t *userParameters = &ups;
+
     userParameters->uencoding = FM;
     userParameters->skipTracks = 0;
     userParameters->out_level = 0;
-    userParameters->out_level = OUT_QUIET;
-    userParameters->out_file_level = OUT_QUIET;
+    userParameters->out_level = LOUT_QUIET;
+    userParameters->out_file_level = LOUT_QUIET;
     userParameters->imageType = -1;
+    
+    track_t tt;
+    track_t *track = &tt;
 
-    optionParse(argc, argv);
+    optionParse(argc, argv, userParameters);
+    if (userParameters->kind == 0) {
+                usage(userParameters);
+                exit(1);
+    }
+    setLogLevel(userParameters->out_level);
 
     if (!checkImageHeader()) {
         return(EXIT_FAILURE);
     }
 
-    userParameters->fileHandle = openDumpFile(userParameters->imageFile);
+    userParameters->fileHandle = openDumpFile(userParameters);
     if (userParameters->fileHandle == 0) {
-        printf("Error opening %s, exiting\n", userParameters->imageFile);
+        logger(LOUT_ERRORS, "Error opening %s, exiting\n", userParameters->imageFile);
         exit(1);
     }
     while(1) {
         scrubTrackBuffer(track);
-        pos = processTrackHeader(pos);
+        pos = processTrackHeader(pos, track);
         if (pos == 0) return(EXIT_SUCCESS);
-        printf(" main; returned track position: %08X\n", pos);
+        logger(LOUT_DEBUG, " main; returned track position: %08X\n", pos);
 
         silentTrack = userParameters->skipTracks && isOdd(trackCount);
-        pos = processTrack(pos, silentTrack);
+        pos = processTrack(pos, silentTrack, track, userParameters);
         if (pos == 0) return(EXIT_SUCCESS);
-        printf(" main; returned next track header position: %08X\n", pos);
-        printf("------------- next track -------------\n");
+        logger(LOUT_DEBUG, " main; returned next track header position: %08X\n", pos);
+        logger(LOUT_DEBUG, "------------- next track -------------\n");
         trackCount++;
-  //      if (trackCount > 9) break;
+        if (trackCount > 159) break;
     }
     closeDumpFile(userParameters->fileHandle);
     return (EXIT_SUCCESS);
 }
 
 int isOdd(int value) {
-//    printf("  isOdd; returning %d for %d\n", value % 2, value);
+//    logger(LOUT_DEBUG, "  isOdd; returning %d for %d\n", value % 2, value);
     return (value % 2);
 }
 
-void process_bit(int bit) {
-  static int curcyl = 0;
-  unsigned char val = 0;
-  int i;
-  
-  /* static vars. Set once, reset by hackerish argument values > 1 */
-   static unsigned long long accum = 0;
-   static unsigned long long taccum = 0;
-   static int bits = 0;
-   static unsigned short crc;
-   static int mark_after = -1;
-   static int write_splice = 0;
-   static int curenc = 0;
-   static int ibyte, dbyte;
-   static int sizecode = 0;
-   static unsigned char premark = 0;
-   static int first_encoding;  /* first encoding to try on next track */
-   static int errcount;
-   static int good_sectors = 0;
-   static int enc_count[N_ENCS];
-   static int total_enc_count[N_ENCS];
-   static int valid_id = 0;
-   static int awaiting_dam = 0;
-   static int awaiting_iam = 0;
-   static int sectorCount = 0;
-
-/* Hacks to re-initialize static variables. process_bit() is only used with argument values 0 and 1 */
-   if (bit == 2) { /* Executed at the start of each track */
-      /* process_bit local */
-      accum = 0;
-      taccum = 0;
-      bits = 0;
-      premark = 0;
-      mark_after = -1; 
-      curenc = first_encoding;
-      errcount = 0;
-      for (i = 0; i < N_ENCS; i++) enc_count[i] = 0;
-      sectorCount = 0;
-      return;
-  }
-   if (bit == 3) { /* Executed at that start of each sector */
-      ibyte = dbyte = -1; // set both ibyte as dbyte in inactive mode
-      awaiting_dam = 0;
-      valid_id = 0;
-      errcount++;
-      return; 
-  }
-  
-  /* interim localised vars */
-//  unsigned short crc;
-  int backward_am = 0;
-
-  accum = (accum << 1) + bit;
-  taccum = (taccum << 1) + bit;
-  bits++;
-  if (mark_after >= 0) mark_after--;
-  if (write_splice > 0) write_splice--;
-
-  /*
-   * Pre-detect address marks: we shift bits into the low-order end of
-   * our 64-bit shift register (accum), look for marks in the lower
-   * half, but decode data from the upper half.  When we recognize a
-   * mark (or certain other patterns), we repeat or drop some bits to
-   * achieve proper clock/data separation and proper byte-alignment.
-   * Pre-detecting the marks lets us do this adjustment earlier and
-   * decode data more cleanly.
-   *
-   * We always sample bits at the MFM rate (twice the FM rate), but
-   * we look for both FM and MFM marks at the same time.  There is
-   * ambiguity here if we're dealing with normal (not DEC-modified)
-   * MFM, because FM marks can be legitimate MFM data.  So we don't
-   * look for FM marks while we think we're inside an MFM ID or data
-   * block, only in gaps.  With -e2, we don't look for FM marks at
-   * all.
-   */
-
-  /*
-   * For FM and RX02 marks, we look at 9 data bits (including a
-   * leading 0), which ends up being 36 bits of accum (2x for clocks,
-   * another 2x for the double sampling rate).  We must not look
-   * inside a region that can contain standard MFM data.
-   */
-  if (userParameters->uencoding != MFM && bits >= 36 && !write_splice &&
-      (curenc != MFM || (ibyte == -1 && dbyte == -1 && mark_after == -1))) {
-        switch (accum & 0xfffffffffULL) {
-        case 0x8aa2a2a88ULL:  /* 0xfc / 0xd7: Index address mark */
-        case 0x8aa222aa8ULL:  /* 0xfe / 0xc7: ID address mark */
-        case 0x8aa222888ULL:  /* 0xf8 / 0xc7: Standard deleted DAM */
-        case 0x8aa22288aULL:  /* 0xf9 / 0xc7: RX02 deleted DAM / WD1771 user DAM */
-        case 0x8aa2228a8ULL:  /* 0xfa / 0xc7: WD1771 user DAM */
-        case 0x8aa2228aaULL:  /* 0xfb / 0xc7: Standard DAM */
-        case 0x8aa222a8aULL:  /* 0xfd / 0xc7: RX02 DAM */
-          curenc = change_enc(curenc, FM);
-          track->sector[sectorCount].encoding = curenc;
-          if (bits < 64 && bits >= 48) {
-            msg(OUT_HEX, "(+%d)", 64-bits);
-            bits = 64; /* byte-align by repeating some bits */
-          } else if (bits < 48 && bits > 32) {
-            msg(OUT_HEX, "(-%d)", bits-32);
-            bits = 32; /* byte-align by dropping some bits */
-          }
-          mark_after = 32;
-          premark = 0; // doesn't apply to FM marks
-          break;
-
-        case 0xa222a8888ULL:  /* Backward 0xf8-0xfd DAM */
-          curenc = change_enc(curenc, FM);
-          track->sector[sectorCount].encoding = curenc;
-          backward_am++;
-          msg(OUT_ERRORS, "[backward AM] ");
-          break;
-        }
-  }
-
-  /*
-   * For MFM premarks, we look at 16 data bits (two copies of the
-   * premark), which ends up being 32 bits of accum (2x for clocks).
-   */
-  if (userParameters->uencoding != FM && userParameters->uencoding != RX02 &&
-      bits >= 32 && !write_splice) {
-    switch (accum & 0xffffffff) {
-    case 0x52245224:
-      /* Pre-index mark, 0xc2c2 with missing clock between bits 3 & 4
-	 (using 0-origin big-endian counting!).  Would be 0x52a452a4
-	 without missing clock. */
-      curenc = change_enc(curenc, MFM);
-      track->sector[sectorCount].encoding = curenc;
-      premark = 0xc2;
-      if (bits < 64 && bits > 48) {
-	msg(OUT_HEX, "(+%d)", 64-bits);
-	bits = 64; /* byte-align by repeating some bits */
-      }
-      mark_after = bits;
-      break;
-
-    case 0x44894489:
-      /* Pre-address mark, 0xa1a1 with missing clock between bits 4 & 5
-	 (using 0-origin big-endian counting!).  Would be 0x44a944a9
-	 without missing clock.  Reading a pre-address mark backward
-	 also matches this pattern, but the following byte is then 0x80. */
-      curenc = change_enc(curenc, MFM);
-      track->sector[sectorCount].encoding = curenc;
-      premark = 0xa1;
-      if (bits < 64 && bits > 48) {
-	msg(OUT_HEX, "(+%d)", 64-bits);
-	bits = 64; /* byte-align by repeating some bits */
-      }
-      mark_after = bits;
-      break;
-
-    case 0x55555555:
-      if (curenc == MFM && mark_after < 0 &&
-	  ibyte == -1 && dbyte == -1 && !(bits & 1)) {
-	/* ff ff in gap.  This should probably be 00 00, so drop 1/2 bit */
-	msg(OUT_HEX, "(-1)");
-	bits--;
-      }
-      break;
-
-    case 0x92549254:
-      if (mark_after < 0 && ibyte == -1 && dbyte == -1) {
-	/* 4e 4e in gap.  This should probably be byte-aligned */
-	curenc = change_enc(curenc, MFM);
-        track->sector[sectorCount].encoding = curenc;
-	if (bits < 64 && bits > 48) {
-	  /* Byte-align by dropping bits */
-	  msg(OUT_HEX, "(-%d)", bits-48);
-	  bits = 48;
-	}
-      }
-      break;
-    }
-  }
-
-  /* Undo RX02 DEC-modified MFM transform (in taccum) */
-#if WINDOW == 4
-  if (bits >= WINDOW && (bits & 1) == 0 && (accum & 0xfULL) == 0x8ULL) {
-    taccum = (taccum & ~0xfULL) | 0x5ULL;
-  }
-#else /* WINDOW == 12 */
-  if (bits >= WINDOW && (bits & 1) == 0 && (accum & 0x7ffULL) == 0x222ULL) {
-    taccum = (taccum & ~0x7ffULL) | 0x154ULL;
-  }
-#endif
-
-  if (bits < 64) return;
-
-  if (curenc == FM || curenc == MIXED) {
-    /* Heuristic to detect being off by some number of bits */
-    if (mark_after != 0 && ((accum >> 32) & 0xddddddddULL) != 0x88888888ULL) {
-      for (i = 1; i <= 3; i++) {
-	if (((accum >> (32 - i)) & 0xddddddddULL) == 0x88888888ULL) {
-	  /* Ignore oldest i bits */
-	  bits -= i;
-	  msg(OUT_HEX, "(-%d)", i);
-	  if (bits < 64) return;
-	  break;
-	}
-      }
-      if (i > 3) {
-	/* Note bad clock pattern */
-	msg(OUT_HEX, "?");
-      }
-    }
-    for (i=0; i<8; i++) {
-      val |= (accum & (1ULL << (4*i + 1 + 32))) >> (3*i + 1 + 32);
-    }
-    bits = 32;
-
-  } else if (curenc == MFM) {
-    for (i=0; i<8; i++) {
-      val |= (accum & (1ULL << (2*i + 48))) >> (i + 48);
-    }
-    bits = 48;
-
-  } else /* curenc == RX02 */ {
-    for (i=0; i<8; i++) {
-      val |= (taccum & (1ULL << (2*i + 48))) >> (i + 48);
-    }
-    bits = 48;
-  }
-
-  if (mark_after == 0) {
-    mark_after = -1;
-    switch (val) {
-    case 0xfc:
-      /* Index address mark */
-      if (curenc == MFM && premark != 0xc2) break;
-      check_missing_dam(awaiting_dam);
-      msg(OUT_IDS, "\n#fc ");
-//      dmk_iam(0xfc, curenc);
-      ibyte = -1;
-      dbyte = -1;
-      track->indexMark = val;
-      return;
-
-    case 0xfe:
-      /* ID address mark */
-      if (curenc == MFM && premark != 0xa1) break;
-      if (awaiting_iam) break;
-      check_missing_dam(awaiting_dam);
-      msg(OUT_IDS, "\n#fe ");
-//      dmk_idam(0xfe, curenc);
-      ibyte =  0;
-      dbyte = -1;
-      crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
-      track->sector[sectorCount].idam = val;
-      return;
-
-    case 0xf8: /* Standard deleted data address mark */
-    case 0xf9: /* WD1771 user or RX02 deleted data address mark */
-    case 0xfa: /* WD1771 user data address mark */
-    case 0xfb: /* Standard data address mark */
-    case 0xfd: /* RX02 data address mark */
-      if (!awaiting_dam) {
-	msg(OUT_ERRORS, "[unexpected DAM] ");
-	errcount++;
-	break;
-      }
-      awaiting_dam = 0;
-      msg(OUT_HEX, "\n");
-      msg(OUT_IDS, "\n#%2x ", val);
-//      dmk_data(val, curenc);
-      if ((userParameters->uencoding == MIXED || userParameters->uencoding == RX02) &&
-	  (val == 0xfd ||
-	   (val == 0xf9 && (total_enc_count[RX02] + enc_count[RX02] > 0 ||
-			    userParameters->uencoding == RX02)))) {
-	curenc = change_enc(curenc, RX02);
-        track->sector[sectorCount].encoding = curenc;
-      }
-      /* For MFM, premark a1a1a1 is included in the CRC */
-      crc = calc_crc1((curenc == MFM) ? 0xcdb4 : 0xffff, val);
-      ibyte = -1;                               // switch from IDAM zone
-      dbyte = secsize(sizecode, curenc) + 2;    //  to DAM zone
-      track->sector[sectorCount].dam = val;
-      return;
-
-    case 0x80: /* MFM DAM or IDAM premark read backward */
-      if (curenc != MFM || premark != 0xc2) break;
-      backward_am++;
-      msg(OUT_ERRORS, "[backward AM] ");
-      break;
-
-    default:
-      /* Premark with no mark */
-      //msg(OUT_ERRORS, "[dangling premark] ");
-      //errcount++;
-      break;
-    }
-  }
-
-  switch (ibyte) {
-  default:
-    break;
-  case 0:
-    msg(OUT_IDS, "cyl=");
-    curcyl = val;
-    track->sector[sectorCount].track = val;
-    break;
-  case 1:
-    msg(OUT_IDS, "side=");
-    track->sector[sectorCount].head = val;
-    break;
-  case 2:
-    msg(OUT_IDS, "sec=");
-    track->sectorOrder[sectorCount] = val;
-    track->sector[sectorCount].sector = val;
-    break;
-  case 3:
-    msg(OUT_IDS, "size=");
-    sizecode = val;
-    track->sector[sectorCount].sectorSize = val;
-    break;
-  case 4:
-    msg(OUT_HEX, "crc=");
-    track->sector[sectorCount].idam_crc1 = val;
-    break;
-  case 5:
-    track->sector[sectorCount].idam_crc2 = val;
-    break;
-  case 6:
-    if (crc == 0) {
-      msg(OUT_IDS, "[good ID CRC] ");
-      valid_id = 1;
-    } else {
-      msg(OUT_ERRORS, "[bad ID CRC] ");
-      errcount++;
-      ibyte = -1;
-    }
-    msg(OUT_HEX, "\n");
-    awaiting_dam = 1;
-//    dmk_check_wraparound();
-    break;
-  case 18:
-    /* Done with post-ID gap */
-     msg(OUT_IDS, "\n");
-    ibyte = -1;
-    break;
-  }
-
-  if (ibyte == 2) { // Sector number
-    msg(OUT_ERRORS, "%02x ", val);
-  } else if (ibyte >= 0 && ibyte <= 3) { // Track number, Side number, Encoding
-    msg(OUT_IDS, "%02x ", val);
-  } else { // 
-    msg(OUT_SAMPLES, "<");
-    msg(OUT_HEX, "%02x", val);
-    msg(OUT_SAMPLES, ">");
-    msg(OUT_HEX, " ", val);
-    msg(OUT_RAW, "%c", val);
-  }
-
-//  dmk_data(val, curenc);
-  if (dbyte > 2) { // 
-      track->sector[sectorCount].sectorData[secsize(sizecode, curenc) - dbyte + 2] = val;
-  } 
-  if (dbyte == 2) { 
-      track->sector[sectorCount].data_crc1 = val;
-  } 
-  if (dbyte == 1) { // 0 is not reached, so 1 is last...
-      track->sector[sectorCount].data_crc2 = val;
-  }
-
-  if (ibyte >= 0) ibyte++;
-  if (dbyte > 0) dbyte--;
-  crc = calc_crc1(crc, val);
-
-  if (dbyte == 0) {
-    if (crc == 0) {
-      msg(OUT_IDS, "[good data CRC]\n");
-      if (valid_id) {
-	if (good_sectors == 0) first_encoding = curenc;
-	good_sectors++;
-	enc_count[curenc]++;
-	cylseen = curcyl;
-      }
-    } else {
-      msg(OUT_ERRORS, "[bad data CRC]\n");
-      errcount++;
-    }
-    msg(OUT_HEX, "\n");
-    dbyte = -1;
-    valid_id = 0;
-    write_splice = WRITE_SPLICE;
-    if (curenc == RX02) {
-      curenc = change_enc(curenc, FM);
-      track->sector[sectorCount].encoding = curenc;
-    }
-    sectorCount++;
-  }
-
-  /* Predetect bad MFM clock pattern.  Can't detect at decode time
-     because we need to look at 17 bits. */
-  if (curenc == MFM && bits == 48 && !mfm_valid_clock(accum >> 32)) {
-    if (mfm_valid_clock(accum >> 31)) {
-      msg(OUT_HEX, "(-1)");
-      bits--;
-    } else {
-      msg(OUT_HEX, "?");
-    }
-  }    
-}
-
-/*
- * Convert Catweasel samples to strings of alternating clock/data bits
- * and pass them to process_bit for further decoding.
- * Ad hoc method using two fixed thresholds modified by a postcomp
- * factor.
- */
-void process_sample(int sample)
-{
-    static float adj = 0.0;
-    int len;
-    int cwclock    =   1;       // cw clock multiplier 1=7.0805 MHz, 2=14.161MHz, 4=28.322MHz
-                                // df uses 25, 50, 100MHz
-    int fmthresh   = 123;
-    int mfmthresh1 =  98;
-    int mfmthresh2 = 139;
-    float mfmshort = -1.0;
-//    float postcomp = 0.5; // original
-//    float postcomp = 0.1; // works with FM fmthresh   = 123;
-    float postcomp = 0.0;   //   works with FM and MFM, effectively nulling adj
-
-    msg(OUT_SAMPLES, "%d", sample);
-    if (userParameters->uencoding == FM) {
-      if (sample + adj <= fmthresh) {
-        /* Short */
-        len = 2;
-      } else {
-        /* Long */
-        len = 4;
-      }
-    } else {
-      if (sample + adj <= mfmthresh1) {
-        /* Short */
-        len = 2;
-      } else if (sample + adj <= mfmthresh2) {
-        /* Medium */
-        len = 3;
-      } else {
-        /* Long */
-        len = 4;
-      }
-    }
-    adj = (sample - (len/2.0 * mfmshort * cwclock)) * postcomp;
-
-    msg(OUT_SAMPLES, "%c ", "--sml"[len]);
-//    msg(OUT_SAMPLES, "%c(%0.2f) ", "--sml"[len], adj);
-
-    process_bit(1);
-    while (--len) process_bit(0);
-}
 
 
-int change_enc(int curenc, int newenc)
-{
-  char *enc_name[] = { "autodetect", "FM", "MFM", "RX02" };
-  if (curenc != newenc) {
-    msg(OUT_ERRORS, "[%s->%s] ", enc_name[curenc], enc_name[newenc]);
-    return(newenc);
-  }
-  return(curenc);
-}
-
-/* Log a message. */
-
-char *out_file_name;
-FILE* out_file;
-
-void msg(int level, const char *fmt, ...)
-{
-  va_list args;
-
-  if (level <= userParameters->out_level &&
-      !(level == OUT_RAW && userParameters->out_level != OUT_RAW) &&
-      !(level == OUT_HEX && userParameters->out_level == OUT_RAW)) {
-    va_start(args, fmt);
-    vfprintf(stdout, fmt, args);
-    va_end(args);
-  }
-  if (out_file && level <= userParameters->out_file_level &&
-      !(level == OUT_RAW && userParameters->out_file_level != OUT_RAW) &&
-      !(level == OUT_HEX && userParameters->out_file_level == OUT_RAW)) {
-    va_start(args, fmt);
-    vfprintf(out_file, fmt, args);
-    va_end(args);
-  }
-}
-
-
-int secsize(int sizecode, int encoding)
-{
-//    printf("sizecode: %d, encoding: %d\n", sizecode, encoding);
-  int maxsize = 3;  /* 177x/179x look at only low-order 2 bits */
-  switch (encoding) {
-      case MFM:
-        /* 179x can only do sizes 128, 256, 512, 1024, and ignores
-           higher-order bits.  If you need to read a 765-formatted disk
-           with larger sectors, change maxsize with the -z
-           command line option. */
-        return 128 << (sizecode % (maxsize + 1));
-        break;
-      case FM:
-      default:
-        /* WD1771 has two different encodings for sector size, depending on
-           a bit in the read/write command that is not recorded on disk.
-           We guess IBM encoding if the size is <= maxsize, non-IBM
-           if larger.  This doesn't really matter for demodulating the
-           data bytes, only for checking the CRC.  */
-        if (sizecode <= maxsize) {
-          /* IBM */
-          return 128 << sizecode;
-        } else {
-          /* non-IBM */
-          return 16 * (sizecode ? sizecode : 256);
-        }
-        break;
-      case RX02:
-        return 256 << (sizecode % (maxsize + 1));
-        break;
-      }
-        
-}
-
-int mfm_valid_clock(unsigned long long accum)
-{
-  /* Check for valid clock bits */
-  unsigned int xclock = ~((accum >> 1) | (accum << 1)) & 0xaaaa;
-  unsigned int clock = accum & 0xaaaa;
-  if (xclock != clock) {
-    msg(OUT_ERRORS, "[clock exp %04x got %04x]", xclock, clock);
-    return 0;
-  }
-  return 1;
-}
 
 char* plu(int val)
 {
   return (val == 1) ? "" : "s";
 }
 
-/* crc.c
-   Compute CCITT CRC-16 using the correct bit order for floppy disks.
-   $Id: crc.c,v 1.2 2001/06/12 07:31:43 mann Exp $
-*/
-
-/* Slow way, not using table */
-unsigned short CALC_CRC1a(unsigned short crc, unsigned char byte)
-{
-  int i = 8;
-  unsigned short b = byte << 8;
-  while (i--) {
-    crc = (crc << 1) ^ (((crc ^ b) & 0x8000) ? 0x1021 : 0);
-    b <<= 1;
-  }
-  return crc;
-}
-
-/* Recompute the CRC with len bytes appended. */
-unsigned short calc_crc(unsigned short crc,
-			unsigned char const *buf, int len) 
-{
-  while (len--) {
-    crc = calc_crc1(crc, *buf++);
-  }
-  return crc;
-}
-
+/*
 void check_missing_dam(int dmk_awaiting_dam)
 {
   if (!dmk_awaiting_dam) return;
   process_bit(3);
-  msg(OUT_ERRORS, "[missing DAM] ");
+  logger(LOUT_ERRORS, "[missing DAM] ");
 }
+*/
+

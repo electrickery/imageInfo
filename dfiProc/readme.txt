@@ -1,4 +1,4 @@
-This is the readme.txt of the 0.3 version of the DFI-processor.
+This is the readme.txt of the 0.4 version of the DFI-processor.
 This tool reads image files produced by the DiscFerret and displays the 
 interpreted data on screen. Currently the only output format is JV1,
 which is the sector data in the proper order. Only single sided is 
@@ -17,17 +17,24 @@ functionality are first priorities.
 The output currently prints a histograph for each track, and this can probably 
 replace the fixed tresholds currently used.
 
+The main differences between this release and the previous 0.3 are:
+- improved logging supporting more levels,
+- restructured the code, further reducing the global variables and organizing
+  functionality into distinct files,
+- the supported output format jv1 is actually tested (and found working).
+
 The core is not programmed by me but from the cw2dmk package by Tim Mann,
 http://tim-mann.org/catweasel.html.
 
 THe tool can be started by:
-./NetBeansProjects/dfiProcess/dfiProc -d newdos80m1.dfi -s -v 4 -f dump.jv1 -t 1
+./NetBeansProjects/dfiProcess/dfiProc -d nd80v2_sssd40.dfi -e 1 -v 3 -f test.jv1 -k 5 -i 1
 
-the -s option skips every odd track. This is because the original disk is
-35 tracks, and the drive used to read it 80 tracks. The supported DFI format
-is version 1.1 (header DFE2). -f is the file name, -t the image type.
 
-2012-02-21,
+The supported DFI format is version 1.1 (header DFE2). -f is the file name, 
+-t the image type. Other options are described in the usage. An attempt is made 
+to follow the cw2dmk option convention.
+
+2012-04-09,
 Fred Jan Kraan
 
 
