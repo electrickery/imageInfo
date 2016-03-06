@@ -2,12 +2,26 @@ Vfloppy is written by Justin Michell and friends in 1996. The original
 version, now called 1.0, can be found at ftp.discordia.org.uk/pub/cpm/emulate.
 Version 1.0 emulates one to four floppy drives for the Epson PX-4.
 
-Version 1.1 s delivered by Fred Jan Kraan in June 2002 and adds 
+Version 1.1 is delivered by Fred Jan Kraan in June 2002 and adds 
 support for the PX-8.
 Files with version number 1.0 are unchanged from the package 1.0 versions.
 Files with version number 1.1 are (slightly) modified.
 
 Executables compiled with SuSE Linux 7.1 kernel 2.4.10-4GB 
 
-Fred Jan Kraan, 2002-06-18
+Version 1.2 is delivered by Fred Jan Kraan in July 2002 and adds
+a utility to read the images from Linux, vfread. An accompanying
+vfwrite is planned for 1.3 or later.
+
+Fred Jan Kraan, 2002-07-10
 fjkraan@xs4all.nl
+
+Some comment on the non-obvious files:
+disk.0       - the disk.x files are example disk images
+disk.1          used by the vfrun.sh run example file
+disk.2
+disk.3
+px4util.dsk  - a disk with the contents of the PX-4 UTL ROM
+px8games.dsk - four games for the PX-8 as found on ftp.epson-usa.com
+px8util.dsk  - a disk with the contents of the PX-8 UTL ROM
+vfrun.sh     - an example on how to run the epspd utility

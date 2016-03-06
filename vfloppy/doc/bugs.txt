@@ -1,0 +1,21 @@
+16 kByte file size limit in Epson PX-8 EPSP based disk-system?
+
+Recently I completed image read and write programs for an emulator 
+(vfloppy, http://www.xs4all.nl/~fjkraan/comp/px4/vfloppy/) of the 
+Epson TF-20 disk unit used by the Epson PX-4 / PX-8 / HX-20. While 
+testing, I found neither the PX-4 and PX-8 can write files larger 
+than 16 kByte (more than one directory entry). The PX overwrites the 
+first directory extend with the second and higher extends. This 
+behaviour is seen while copying with PIP and NSWEEP, but not when 
+creating large files from BASIC.
+
+The problem was detected first with the emulator, but the real
+TF-20 does the same. STAT reports the correct file size (based on
+highest extend number and records in this extend), but only
+one extend, effectively limiting the file to 16 kByte. 
+
+Copying to the RAM disk (A:) works ok, so it is EPSP related. The
+EPSP is previously classified as sucking, but it seems to be proven
+now :-).
+
+FJK, 200208

@@ -1,14 +1,33 @@
 /*
- * cmd.h version 1.0 part of the vfloppy 1.1 package
+ * cmd.c version 1.2 part of the vfloppy 1.2 package
  *
- * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends. 
+ * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends.
  *
- * This version is delivered by Fred Jan Kraan (fjkraan@xs4all.nl) in
- * June 2002.
+ * This version delivered in 2002 by Fred Jan Kraan (fjkraan@xs4all.nl)
  *
- * This software is placed under the GPL in June 2002.
+ * vfread is placed under the GNU General Public License in July 2002.
+ *
+ *  This file is part of Vfloppy 1.2.
+ *
+ *  Vfloppy is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  Vfloppy is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with Vfloppy; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
  */
 
+/*
+ * cmd - functions for epspd.c. Implements execution of the commands.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -26,7 +45,6 @@ void show_dir_entry(unsigned char *block)
 	int offset;
 	char filename[13];
 	int size,part;
-#if DEBUG>0
 	for (offset=0; offset<128; offset+=32)
 	{
 		printf("%d: ",offset/32);
@@ -34,7 +52,7 @@ void show_dir_entry(unsigned char *block)
 			printf("No File\n");
 		else
 		{
-			memcpy(filename,&block[offset+1],8);
+			memcpy(&filename[0],&block[offset+1],8);
 			filename[8]='.';
 			memcpy(&filename[9],&block[offset+9],3);
 			filename[12]=0;
@@ -48,14 +66,11 @@ void show_dir_entry(unsigned char *block)
 			printf("\n");
 		}
 	}
-#endif
 }
-			
-
 
 void fdc_go_ack()
 {
-	char dp=0x06;
+	char dp=ACK;
 	write(epsp_port, &dp, 1);	
 #if DEBUG>1
 	printf("Sent ACK\n");
@@ -64,7 +79,7 @@ void fdc_go_ack()
 
 void fdc_go_nak()
 {
-	char dp=0x15;
+	char dp=NAK;
 	write(epsp_port, &dp, 1);	
 #if DEBUG>1
 	printf("Sent NAK\n");
@@ -84,10 +99,14 @@ int log_write(int fd, unsigned char *data, int len)
 {
 	int ct;
 #if DEBUG>1
+	printf("\nc>");
 	for(ct=0;ct<len;ct++)
 		printf("%02X ",data[ct]);
 #endif
 	return write(fd,data,len);
+#if DEBUG>1
+        printf("\n");
+#endif
 }
 
 static void send_epsp(struct epsp_msg *r)
@@ -116,7 +135,7 @@ static void send_epsp(struct epsp_msg *r)
 	 
 	blk_read(epsp_port, d, 1);
 	
-	if(d[0]==0x15)
+	if(d[0]==NAK)
 	{
 #if DEBUG>1
 		printf("\nNAKkered\n");
@@ -127,16 +146,16 @@ static void send_epsp(struct epsp_msg *r)
 	if(d[0]==0x05)
 	{
 #if DEBUG>1
-		printf("\nENQ\n");
+		printf("\nReceived ENQ\n");
 #endif
 		fdc_go_ack();
 		return;
 	}
 	
-	if(d[0]!=0x06)
+	if(d[0]!=ACK)
 	{
 #if DEBUG>1
-		printf("\n%X return\n", d[0]);
+		printf("\nReceived no ACK but %02X\n", d[0]);
 #endif
 		return;
 	}
@@ -163,7 +182,7 @@ static void send_epsp(struct epsp_msg *r)
 	 
 	blk_read(epsp_port, d, 1);
 	
-	if(d[0]==0x15)
+	if(d[0]==NAK)
 	{
 #if DEBUG>1
 		printf("\nNAKkered\n");
@@ -171,7 +190,7 @@ static void send_epsp(struct epsp_msg *r)
 		return;
 	}
 	
-	if(d[0]==0x05)
+	if(d[0]==ENQ)
 	{
 #if DEBUG>1
 		printf("\nENQ\n");
@@ -180,10 +199,10 @@ static void send_epsp(struct epsp_msg *r)
 		return;
 	}
 	
-	if(d[0]!=0x06)
+	if(d[0]!=ACK)
 	{
 #if DEBUG>1
-		printf("\n%X return\n", d[0]);
+		printf("\nReceived no ACK but %02X\n", d[0]);
 #endif
 		return;
 	}
@@ -193,7 +212,7 @@ static void send_epsp(struct epsp_msg *r)
 	 */
 	 
 	
-	d[0]=0x04;
+	d[0]=EOT;
 	log_write(epsp_port,d,1);
 #if DEBUG>1
 	printf("\n");
@@ -202,17 +221,11 @@ static void send_epsp(struct epsp_msg *r)
 
 #define ADJUST 4
 
-#ifdef 0
-#define BLOCK_MAP(a,b)		(((a*64L)+b)*128L)
-#else
 static int BLOCK_MAP(int a,int b)
 {
-#if DEBUG>0
-	printf("BLOCK_MAP: Track %d Sector %d == 0x%X\n",a,b,(((a-0)*64L)+b)*128L);
-#endif
+	printf("BLOCK_MAP: Track %d Sector %d == 0x%lX\n",a,b,(((a-0)*64L)+b)*128L);
 	return((((a-ADJUST)*64L)+b)*128L);
 }
-#endif
 
 static int block_read(int fd, unsigned char *data, unsigned long block, int len)
 {
@@ -224,11 +237,11 @@ static int block_read(int fd, unsigned char *data, unsigned long block, int len)
 	}
 	err=read(fd,data,len);
 #if DEBUG>0
-printf("DISK: READ: pos=0x%X len=%d\n", block, len);
-#endif
+printf("DISK: %d READ: pos=0x%lX len=%d\n", fd, block, len);
 	if (block>(0x2000*(4-ADJUST)) && block < (0x2000*((4-ADJUST)+2)))
 			show_dir_entry(data);
 	return err;
+#endif
 }
 
 static int block_write(int fd, unsigned char *data, unsigned long block, int len)
@@ -241,34 +254,42 @@ static int block_write(int fd, unsigned char *data, unsigned long block, int len
 	}
 	err=log_write(fd,data,len);
 #if DEBUG>0
-printf("DISK: WRITE: pos=0x%X len=%d\n", block, len);
-#endif
+printf("DISK: %d WRITE: pos=0x%lX len=%d\n", fd, block, len);
 	if (block>(0x2000*(4-ADJUST)) && block < (0x2000*((4-ADJUST)+2)))
 			show_dir_entry(data);
 	return err;
+#endif
 }
 
 
 static int drive_of(unsigned char a, unsigned char b)
 {
+        /* a = a - 0x31 */
 	a-=0x31;
 	if(a>1)
 	{
 		fprintf(stderr, "EPSP: bad drive (%d) using 0\n", a);
 		return 0;
 	}
+        /* a = a * 2, left shift one position unary operator */
 	a<<=1;
+	/* b = b -1 */
 	b--;
 	if(b>1)
 	{
 		fprintf(stderr,"EPSP: bad disk (%d) using 0\n", b);
 		return 1;
 	}
+	/* a = a + b */
 	a+=b;
 	return a;
 	
 }
 
+/* struct epsp *s       = the message from the PX, used to create return message header
+   unsigned char *bytes = contains track and sector data. data[256]
+   int len              = ignored, suppost to be always 128
+ */
 void fdc_cmd_reset(struct epsp *s, unsigned char *bytes,int len)
 {
 	struct epsp_msg reply;
@@ -289,8 +310,10 @@ void fdc_cmd_read(struct epsp *s, unsigned char *bytes, int len)
 	reply.epsp.did=s->sid;
 	reply.epsp.siz=128;
 	reply.epsp.fnc=s->fnc;
-	if(block_read(drive_fd[drive_of(s->did,bytes[1])], reply.data+1,BLOCK_MAP(bytes[2],bytes[3]),
-		128)!=128)
+	if(block_read(drive_fd[drive_of(s->did,bytes[1])], 
+                      reply.data+1,
+		      BLOCK_MAP(bytes[2],bytes[3]),
+		      128)!=128)
 	{
 		reply.data[129]=FDC_ERR_READ;
 		send_epsp(&reply);
@@ -310,8 +333,10 @@ void fdc_cmd_write(struct epsp *s, unsigned char *bytes, int len)
 	reply.epsp.did=s->sid;
 	reply.epsp.siz=0;
 	reply.epsp.fnc=s->fnc;
-	if(block_write(drive_fd[drive_of(s->did,bytes[1])], bytes+5 ,BLOCK_MAP(bytes[2],bytes[3]),
-		128)!=128)
+	if(block_write(drive_fd[drive_of(s->did, bytes[1])], 
+		       bytes+5,
+                       BLOCK_MAP(bytes[2],bytes[3]),
+		       128)!=128)
 	{
 		reply.data[1]=FDC_ERR_WRITE;
 		perror("write");

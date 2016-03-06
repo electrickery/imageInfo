@@ -1,5 +1,5 @@
 /*
- * epsp.h version 1.2 part of the vfloppy 1.2 package
+ * vformat.c version 1.0 part of the vfloppy 1.2 package
  *
  * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends.
  *
@@ -26,49 +26,34 @@
  */
 
 /*
- * epsp.h - Epson serial protocol implementation
- *
+ * vformat - create a file of image size filled with 0xe5's
+ * 
+ * vformat <imageName>
  */
- 
-/* command message */
-struct epsp
+#include <stdio.h>
+#include <fcntl.h>
+
+int blockCount = 0x8b;
+int blockSize = 0x800;
+
+main(int argc,char **argv)
 {
-	unsigned char head;
-	unsigned char fmt;
-	unsigned char did;
-	unsigned char sid;
-	unsigned char fnc;
-	unsigned char siz;
-};
+	int f;
+	int i;
+	unsigned char buff[blockSize];
 
-/* data message */
-struct epsp_msg
-{
-	struct epsp epsp __attribute__((packed));
-	unsigned char data[256] __attribute__((packed));
-};
-
-#define FMT_FROM_PINE	0x00
-#define FMT_FROM_FDD	0x01
-
-/* disk stations, two drives each */
-#define DID_DE		0x31
-#define DID_FG		0x32
-#define DID_HX		0xE1
-/* disk station select command */
-#define DS_SEL		0x05
-
-/* machine IDs, Maple is PX-8, Pine is PX-4 */
-#define SID_HX20	0x20
-#define SID_MAPLE	0x22
-#define SID_PINE	0x23
-
-#define NUL		0x00
-#define SOH		0x01
-#define STX		0x02
-#define ETX		0x03
-#define EOT		0x04
-#define ENQ		0x05
-#define ACK		0x06
-#define NAK		0x15
-#define US		0x31
+	if (argc<2) 
+	{
+		fprintf(stderr,"Usage: %s <filename>\n",argv[0]);
+		exit(0);
+	}
+	
+	memset(buff, 0xe5, blockSize);
+	f = open(argv[1], O_WRONLY|O_CREAT, 0666);
+	if (f < 0) exit(0);
+	for (i = 0; i < blockCount; i++)
+		write(f, buff, blockSize);
+	write(f, buff, 0x80);
+	close(f);
+	return 0;
+}

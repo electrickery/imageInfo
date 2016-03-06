@@ -1,0 +1,19 @@
+Epson CP/M directory structure (TF-20 compliant)
+
+UU F1 F2 F3 F4 F5 F6 F7 F8 T1 T2 T3 EX S1 S2 RC
+AL AL AL AL AL AL AL AL AL AL AL AL AL AL AL AL
+
+UU - user number: 0 - 15, unused/erased: e5
+Fx - file name padded with spaces
+Tx - file extension padded with spaces
+     T1 bit 7: 1 - read-only, 0 - read/write
+     T2 bit 7: 1 - system file, 0 - plain file
+EX - bit 0: (probably) 0 for final extend, 1 for intermediate extend
+     bit 1 - 6: extend number lower bits
+S1 - reserved set to 0
+S2 - extend number upper bits
+     extendnumber = EX/2 + S2*32
+RC - number of records in current extend (80h, 128 is maximum)
+     an record is 128 bits. So 128 * 128 = 16 kByte per extend.
+AL - allocation block space. 0 is not used.
+

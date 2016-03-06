@@ -1,0 +1,43 @@
+Blocks are units of allocation space in the image. A block is 2 kByte,
+or 16 logical sectors.
+Records are units of file size. A recors is 128 byte, or one logical
+sector.
+
+vfread:
+
+main
+ mountImage             : mounts disk image read-only.
+ convertFileName        : converts file name to 8+3 upper case.
+ findFile               : searches directory.
+  blockRead             : reads a chunk of bytes from filedes.
+  cmpEntry              : compares current entry to specified 8+3 name.
+  updateBlockList       : on match, copies allocation blocks.
+ createFile             : copies allocation blocks to specified file.
+  blockRead             : reads block from filedes.
+
+ showDir                : iterates directory entries.
+  blockRead             : reads block a chunk of bytes filedes.
+  showDirEntry          : formats used directory entries.
+                        : calculates total used blocks.
+
+
+vfwrite:
+
+main
+ mountImageRW           : mounts a disk image read/write.
+ convertFileName        : converts file name to 8+3 upper case.
+ findFile               : searches directory.
+  blockRead             : reads a chunk of bytes from filedes.
+  cmpEntry              : compares current entry to specified 8+3 name.
+  updateBlockList       : on match, copies allocation blocks.
+ countBlocks            : count filesize in blocks for file in image.
+ cntUsedImgBlocks       : count total of used blocks in image.
+  blockRead             : reads block from filedes.
+ checkFileNSize         : calculate filesize in blocks for file in filesystem.
+ getFreeBlockList       : makes a list of free allocation blocks.
+  blockRead             : reads block from filedes.
+ writeDir               : writes a file to the directory.
+  writeDirEntry         : writes a directory entry.
+   blockWrite           : writes a chunk of bytes to a filedes.
+ writeBlocks            : write the file to the blocks in the image.
+  blockWrite            : writes a chunk of bytes to a filedes.
