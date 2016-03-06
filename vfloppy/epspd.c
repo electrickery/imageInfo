@@ -1,3 +1,14 @@
+/*
+ * epspd.c version 1.1 part of the vfloppy 1.1 package
+ *
+ * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends. 
+ *
+ * This version is delivered by Fred Jan Kraan (fjkraan@xs4all.nl) in
+ * June 2002.
+ *
+ * This software is placed under the GPL in June 2002.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -39,7 +50,7 @@ int blk_read(int fd, unsigned char *blk, int len)
 		
 		}
 #if DEBUG>1
-		printf("%2 ",(unsigned int)blk[0]);
+		printf("%02X ",(unsigned int)blk[0]);
 #endif
 		fflush(stdout);
 		sofar+=got;
@@ -70,7 +81,6 @@ void main(int argc, char *argv[])
 		fprintf(stderr,"%s port path1..path4.\n",argv[0]);
 		exit(1);
 	}
-	
 	
 	epsp_port=open(argv[1], O_RDWR);
 	if(epsp_port==-1)
@@ -130,7 +140,7 @@ void main(int argc, char *argv[])
 	while(1)
 	{
 		int len=blk_read(epsp_port,d,1);
-		
+
 		if(*d==4)
 			continue;
 		if(*d==5)
@@ -153,7 +163,9 @@ void main(int argc, char *argv[])
 		
 		
 		if(d[0]!=0x31 && d[0]!=0x32)
+                {
 			continue;
+                }
 		
 		if(d[2]!=0x05)
 		{
@@ -174,6 +186,9 @@ void main(int argc, char *argv[])
 		{
 			int len=blk_read(epsp_port,d,1);
 		
+#if DEBUG>1
+		printf("\n%02X\n ",*d);
+#endif
 			if(*d==4)
 				break;
 
@@ -276,6 +291,9 @@ void main(int argc, char *argv[])
 			switch(r.epsp.fnc)
 			{
 				case FDC_RESET:
+					fdc_cmd_reset(&r.epsp, r.data, r.epsp.siz+1);
+					break;
+				case FDC_RESET_M:
 					fdc_cmd_reset(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_READ:

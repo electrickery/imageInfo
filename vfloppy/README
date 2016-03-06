@@ -1,0 +1,13 @@
+Vfloppy is written by Justin Michell and friends in 1996. The original
+version, now called 1.0, can be found at ftp.discordia.org.uk/pub/cpm/emulate.
+Version 1.0 emulates one to four floppy drives for the Epson PX-4.
+
+Version 1.1 s delivered by Fred Jan Kraan in June 2002 and adds 
+support for the PX-8.
+Files with version number 1.0 are unchanged from the package 1.0 versions.
+Files with version number 1.1 are (slightly) modified.
+
+Executables compiled with SuSE Linux 7.1 kernel 2.4.10-4GB 
+
+Fred Jan Kraan, 2002-06-18
+fjkraan@xs4all.nl

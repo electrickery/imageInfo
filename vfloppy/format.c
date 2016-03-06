@@ -1,3 +1,14 @@
+/*
+ * format.h version 1.0 part of the vfloppy 1.1 package
+ *
+ * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends. 
+ *
+ * This version is delivered by Fred Jan Kraan (fjkraan@xs4all.nl) in
+ * June 2002.
+ *
+ * This software is placed under the GPL in June 2002.
+ */
+
 #include <stdio.h>
 #include <fcntl.h>
 
