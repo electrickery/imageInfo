@@ -1,9 +1,11 @@
 #!/bin/sh
 #
-IMG0='./images/archs.d88'
+TTY='/dev/ttyUSB0'
+IMG0='./images/arcs.d88'
 IMG1='./images/px8_eps-tf20.d88'
-IMG2='./images/px4UtilityDisk.d88'
-IMG3='./images/px4wand.d88'
+IMG2='./images/px8games.d88'
+IMG3='./images/extrautil.d88'
+LOG=2
 
-
-./epspdv3 -s $TTY -0 $IMG0 -1 $IMG1 -2 $IMG2 -3 $IMG3
+echo ./epspdv3 -d $LOG -s $TTY -0 $IMG0 -1 $IMG1 -2 $IMG2 -3 $IMG3
+./epspdv3 -d $LOG -s $TTY -0 $IMG0 -1 $IMG1 -2 $IMG2 -3 $IMG3

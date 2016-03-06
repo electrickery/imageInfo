@@ -26,4 +26,4 @@ strip:
 	strip epspdv3 ; strip
 
 package:
-	tar cvzf ../epspd88v21.tgz ./Makefile ./gpl.txt ./*.c ./*.h ./images/*.d88 ./epspdrun.sh 
+	tar cvzf ../vfloppy23.tgz ./Makefile ./gpl.txt ./*.c ./*.h ./images/*.d88 ./epspdrun.sh 

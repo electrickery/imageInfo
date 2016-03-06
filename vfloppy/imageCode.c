@@ -75,7 +75,7 @@ unsigned long int getSectorLocation(int track, int record, int driveId) {
     // Mapping logical records (128 bytes) to physical disk sectors (256 bytes)
     // including the translation to two sides and that the disk sectors number
     // from 1 to 16.
-    if (record < D88_SECTORS_PER_SIDE * 2) {
+    if (record <= D88_SECTORS_PER_SIDE * 2) {  // Fix found by Ivo Burkart, 2015-10-27. Thanks!
         diskSector = (logicalSector / 2) + 1;
         side = 0;
      } else {

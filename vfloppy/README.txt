@@ -21,5 +21,9 @@ The 2.2 version is tested on x86 Linux and both Raspberry Pi (Raspbian) and Beag
 
 Programs exist to convert Teledisk and ImageDisk images to D88 (http://homepage3.nifty.com/takeda-toshiya/).
 
-fjkraan, 2013-01-26
+Addendum for 2.3: The only change in this version is a bug fix from Ivo Burkart. It fixes the occasional failing seek operation. 
 
+fjkraan, 2015-10-27
+
+
+The original site for this project is http://fjkraan.home.xs4all.nl/comp/px4/vfloppy/. There is an other repository at https://sourceforge.net/projects/vfloppy/

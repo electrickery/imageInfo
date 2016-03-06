@@ -230,7 +230,7 @@ int main(int argc, char *argv[]) {
         driveInfo.drive_fd[1] = -1;
         driveInfo.drive_fd[2] = -1;
         driveInfo.drive_fd[3] = -1;
-        char *version = "version 1.5 (2013-01-05)";
+        char *version = "version 2.3 (2015-10-27)";
 
         msg(LOG_WARN, "\nEPSPD %s\n", version);
 
