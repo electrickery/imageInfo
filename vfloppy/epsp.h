@@ -44,10 +44,13 @@ struct epsp
 /* data message */
 struct epsp_msg
 {
-	struct epsp epsp __attribute__((packed));
-	unsigned char data[256] __attribute__((packed));
+	struct epsp epsp __attribute__(());
+	char data[256] __attribute__(());
 };
 
+char *label[256];
+
+#define FMT_FROM_COMP	0x00
 #define FMT_FROM_PINE	0x00
 #define FMT_FROM_FDD	0x01
 

@@ -1,19 +1,29 @@
-CFLAGS=-DDEBUG=3
+CFLAGS= -Wall -fsigned-char
 
-epspd : epspd.o cmd.o
-	cc -o epspd epspd.o cmd.o -W
+epspdv3 : epspCode.o epspdv3.o epspProtocol.o imageCode.o logger.o
+	cc -o epspdv3 epspdv3.o epspCode.o epspProtocol.o imageCode.o logger.o $(CFLAGS)
 
-cmd.o : cmd.c fdc.h epsp.h
-	cc -c cmd.c -W
+epspProtocol.o : epspProtocol.c epspv3.h epspHeaders.h 
+	cc -c epspProtocol.c $(CFLAGS)
+	
+epspCode.o : epspCode.c fdc.h epspv3.h epspHeaders.h
+	cc -c epspCode.c $(CFLAGS)
 
-epspd.o : epspd.c fdc.h epsp.h
-	cc -c epspd.c -W
+imageCode.o : imageCode.c fdc.h epspv3.h epspHeaders.h
+	cc -c imageCode.c $(CFLAGS)
+
+epspdv3.o : epspdv3.c fdc.h epspv3.h logger.h
+	cc -c epspdv3.c logger.c $(CFLAGS)
+
+logger.o : logger.c logger.h
+	cc -o logger.c $(CFLAGS)
+
 
 clean:
-	rm -f *.o ; rm -f epspd
+	rm -f *.o ; rm -f epspdv3 
 
 strip:
-	strip epspd ; strip
+	strip epspdv3 ; strip
 
 package:
-	tar cvzf ../vfloppy14.tgz ./Makefile ./README ./gpl.txt ./*.c ./*.h ./images/*.vfd ./vfrun.sh ./vfman/Makefile ./vfman/*.c ./vfman/*.h ./doc/*.*
+	tar cvzf ../epspd88v21.tgz ./Makefile ./gpl.txt ./*.c ./*.h ./images/*.d88 ./epspdrun.sh 
