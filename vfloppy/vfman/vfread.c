@@ -1,11 +1,11 @@
 /*
- * vfread.c version 1.1 part of the vfloppy 1.3 package
+ * vfread.c version 1.1 part of the vfloppy 1.4 package
  *
  * Copyright 2002 by Fred Jan Kraan (fjkraan@xs4all.nl)
  *
  * vfread is placed under the GNU General Public License in July 2002.
  *
- *  This file is part of Vfloppy 1.3.
+ *  This file is part of Vfloppy 1.4.
  *
  *  Vfloppy is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
 			printf("To directory mode\n");
 
 		showDir(imd);
-		freeBlocks = DISKSIZE - totalUsedBlockCnt;
+		freeBlocks = DISKBLOCKCOUNT - totalUsedBlockCnt;
 		printf("%d kByte free (%d blocks, %d records)\n", 
 			freeBlocks * 2, 
 			freeBlocks,

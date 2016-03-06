@@ -1,5 +1,5 @@
 /*
- * epspd.c version 1.2 part of the vfloppy 1.2 package
+ * epspd.c version 1.3 part of the vfloppy 1.4 package
  *
  * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends.
  *
@@ -7,7 +7,7 @@
  *
  * vfread is placed under the GNU General Public License in July 2002.
  *
- *  This file is part of Vfloppy 1.2.
+ *  This file is part of Vfloppy 1.4.
  *
  *  Vfloppy is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 /*
  * epspd - emulates up to four virtual disks for the Epson PX-4 and PX-8
  *         computers using the epsp protocol. 
- * epspd <port> <img1> [<img2> [<img3> [<img4>] ] ]
+ * epspd -s <port> [-0 <img0>] [-1 <img1>] [-2 <img2>] [-3 <img3>] [-d <debuglevel>]
  */
 #include <stdio.h>
 #include <string.h>
@@ -43,6 +43,9 @@
 
 int epsp_port;
 int drive_fd[4];
+int debug=0;
+int unit0=0;
+int unit1=0;
 
 int blk_read(int fd, unsigned char *blk, int len)
 {
@@ -67,17 +70,19 @@ int blk_read(int fd, unsigned char *blk, int len)
 			}
 		
 		}
-#if DEBUG>1
-		printf(">%02X ",(unsigned int)blk[0]);
-#endif
+		if (debug >= 2)
+		{
+			printf(">%02X ",(unsigned int)blk[0]);
+		}
 		fflush(stdout);
 		sofar+=got;
 		blk+=got;
 		syncup=0;
 	}
-#if DEBUG>1
-	printf("\n");
-#endif
+	if (debug >= 2)
+	{
+		printf("\n");
+	}
 	return sofar;
 }
 
@@ -87,40 +92,80 @@ int main(int argc, char *argv[])
 	struct termios t;
 	unsigned char d[32];
 	int dv=2;
-	
-	if(sizeof(r.epsp)!=6)
+	int c;
+        char *d_image0 = "\0";
+        char *d_image1 = "\0";
+        char *d_image2 = "\0";
+        char *d_image3 = "\0";
+        char *s_device = "\0";
+	char ch;
+	char *optstr = "d:0:1:2:3:s:";
+
+	while( -1 != (ch=getopt(argc,argv,optstr))) {
+		switch(ch) {
+			case '0':           
+				d_image0 = optarg;
+/*				printf("option: -0 : %s\n", d_image0); */
+				break;
+			case '1':           
+				d_image1 = optarg;
+/*				printf("option: -1 : %s\n", d_image1); */
+				break;
+			case '2':           
+				d_image2 = optarg;
+/*				printf("option: -2 : %s\n", d_image2); */
+				break;
+			case '3':           
+				d_image3 = optarg;
+/*				printf("option: -3 : %s\n", d_image3); */
+				break;
+			case 's':           
+				s_device = optarg;
+/*				printf("option: -s : %s\n", s_device); */
+				break;
+			case 'd':
+				debug = atoi(optarg);
+/*				printf("option: -d : %d\n", debug); */
+				break;
+			case '?':
+				printf("unrecognized option: %c\n",optopt);
+				break;
+			default:
+				printf("error?  condition unaccounted for?\n");
+				break;
+
+		}
+	}
+
+	if (debug >= 1)
 	{
-		fprintf(stderr,"Option botch.\n");
+		printf("\nEPSPD version 1.4 (2003-04-07)");
+		printf("\nDebug level: %d", debug);
+	}
+	if ( s_device[0] != '\0' )
+	{
+		printf("\nSerial port %s specified", s_device); 
+		epsp_port=open(s_device, O_RDWR); 
+		if(epsp_port==-1)
+		{
+			printf("\nError opening serial port %s. Exiting...\n", s_device);
+			perror(s_device); 
+			exit(2);
+		} else {
+			printf("\nSerial port \'%s\' (fd: %d) opened succesfully.", s_device, epsp_port); 
+		}
+	} else {
+		printf("\nNo serial port specified. Exiting...\n");
 		exit(1);
 	}
-	
-	if(argc<3 || argc> 6)
-	{
-		fprintf(stderr,"%s port path1..path4.\n",argv[0]);
-		exit(1);
-	}
-	
-#if DEBUG>2	
-			printf("\nOption count Ok");
-#endif		
-	
-	epsp_port=open(argv[1], O_RDWR);
-	if(epsp_port==-1)
-	{
-		perror(argv[1]);
-		exit(1);
-	}
-#if DEBUG>2	
-/*			printf("\nSerial port %s opened", argv[1]); */
-#endif		
-	
 	
 	if(tcgetattr(epsp_port, &t)==-1)
 	{
 		perror("tcgetattr");
-		exit(1);
+		printf("\nSome error with the serial port\n");
+		exit(2);
 	}
-	
+
 	t.c_iflag=t.c_iflag&~(ISTRIP|INLCR|ICRNL|IGNCR|IUCLC|IXON|IXANY|IXOFF);
 	t.c_oflag=t.c_oflag&~(OPOST);
 	t.c_cflag=t.c_cflag&~(CSIZE|PARENB);
@@ -132,63 +177,127 @@ int main(int argc, char *argv[])
 	if(tcsetattr(epsp_port, TCSANOW, &t)==-1)
 	{
 		perror("tcsetattr");
-		exit(1);
+		exit(2);
 	}
 	
 	/*
 	 *	Now the disk volumes 
 	 */
 	 
-	drive_fd[1]= -1;
-	drive_fd[2]= -1;
-	drive_fd[3]= -1;
-	
-	while(argv[dv])
+
+	if ( d_image0[0] != '\0' )
 	{
-	
-		drive_fd[dv-2]=open(argv[dv],O_RDWR);
-		if(drive_fd[dv-2]==-1)
+		drive_fd[0] = open(d_image0, O_RDWR);
+		if(drive_fd[0]==-1)
 		{
-			perror(argv[dv]);
-			exit(1);
+			printf("\nSome error with opening %s. Exiting...\n", d_image0);
+			perror(d_image0);
+			exit(2);
 		}
-                printf("\nDisk image %s (fd: %d) mounted ok.",argv[dv],drive_fd[dv-2]);
-		dv++;
+		printf("\nDisk 0 image \'%s\' (fd: %d) mounted ok.", d_image0, drive_fd[0]);
+		unit0 = 1;
+	} else {
+		if (debug >= 1)
+		{
+			printf("\nNo image for disk 0 specified");
+		}
 	}
-#if DEBUG>2	
+
+	if ( d_image1[0] != '\0' )
+	{
+		drive_fd[1] = open(d_image1, O_RDWR);
+		if(drive_fd[1]==-1)
+		{
+			printf("\nSome error with opening %s. Exiting...\n", d_image1);
+			perror(d_image1);
+			exit(2);
+		}
+		printf("\nDisk 1 image \'%s\' (fd: %d) mounted ok.", d_image1, drive_fd[1]);
+		unit0 = 1;
+	} else {
+		if (debug >= 1)
+		{
+			printf("\nNo image for disk 1 specified");
+		}
+	} 
+
+	if ( d_image2[0] != '\0' )
+	{
+		drive_fd[2] = open(d_image2, O_RDWR);
+		if(drive_fd[2]==-1)
+		{
+			printf("\nSome error with opening %s. Exiting...\n", d_image2);
+			perror(d_image2);
+			exit(2);
+		}
+		printf("\nDisk 2 image \'%s\' (fd: %d) mounted ok.", d_image2, drive_fd[2]);
+		unit1 = 1;
+	} else {
+		if (debug >= 1)
+		{
+			printf("\nNo image for disk 2 specified");
+		}
+	} 
+
+	if ( d_image3[0] != '\0' )
+	{
+		drive_fd[3] = open(d_image3, O_RDWR);
+		if(drive_fd[3]==-1)
+		{
+			printf("\nSome error with opening %s. Exiting...\n", d_image3);
+			perror(d_image3);
+			exit(2);
+		}
+		printf("\nDisk 3 image \'%s\' (fd: %d) mounted ok.", d_image3, drive_fd[3]);
+		unit1 = 1;
+	} else {
+		if (debug >= 1)
+		{
+			printf("\nNo image for disk 3 specified");
+		}
+	} 
+
+	if ( unit0 == 0 && unit1 == 0)
+	{
+		printf("\nNo image at all specified. Exiting...\n");
+		exit(1);
+	}
+
+if (debug >= 2)	
 			printf("\nDisk images mounted\n");
-#endif		
 	
 	/*
 	 *	Up.. time to go
 	 */
 	 
-	printf("EPSPD: Starting EPSP disk services on %s\n", argv[1]);
+	printf("\nEPSPD: Starting EPSP disk services on %s", s_device);
+	printf("\n");
 	
-	 
 	while(1)
 	{
 		int len=blk_read(epsp_port,d,1);
-#if DEBUG>1
-		printf("\n-> %02X\n ",*d);
-#endif
-		
-		if(d[0]==4)
-			continue;
-		if(d[0]==5)
+		if (debug >= 2)
 		{
-#if DEBUG>2	
-			printf("\nfdc go ack\n");
-#endif		
+			printf("\n-> %02X ",*d);
+		}
+		if(d[0]==EOT)   /* EOT?  ignore */
+			continue;
+		if(d[0]==ENQ)   /* ENQ?  send an ACK */ 
+		{
+			if (debug >= 2)	
+			{
+				printf("\nfdc go ack");
+			}
 			fdc_go_ack();
 			continue;
 		}
 					
 		if(d[0]!=DID_DE)
 		{
-#if DEBUG>2	
-			printf("\nfirst disk station not selected: %02X\n", d[0]);
-#endif		
+			if (debug >= 2)	
+			{
+				printf("\nfirst disk station not selected: %02X", d[0]);
+			}
 			fdc_go_nak();
 			continue;
 		}
@@ -202,48 +311,70 @@ int main(int argc, char *argv[])
 		
 		if(d[0]!=DID_DE && d[0]!=DID_FG)
                 {
-#if DEBUG>2	
-			printf("\nnot DID_DE or DID_FG\n");
-#endif		
-
+			if (debug >= 2)	
+			{
+				printf("\nnot DID_DE or DID_FG");
+			}
 			continue;
                 }
-#if DEBUG>2	
-		if(d[0]==DID_DE)
-			printf("\nFirst disk unit (D:  E:) addressed ");
-		if(d[0]==DID_FG)
-			printf("\nSecond disk unit (F:  G:) addressed ");
-		if(d[1]==SID_MAPLE)
-			printf("by a PX-8\n");
-		if(d[1]==SID_PINE)
-			printf("by a PX-4\n");
-#endif		
+		if (debug >= 2)	
+		{
+			if(d[0]==DID_DE)
+				printf("\nFirst disk unit (D:  E:) addressed ");
+			if(d[0]==DID_FG)
+				printf("\nSecond disk unit (F:  G:) addressed ");
+			if(d[1]==SID_MAPLE)
+				printf("by a PX-8");
+			if(d[1]==SID_PINE)
+				printf("by a PX-4");
+		}
 		
 		if(d[2]!=DS_SEL)
 		{
-#if DEBUG>2	
-			printf("\nfdc go nak: no DS_SEL\n");
-#endif		
+			if (debug >= 2)	
+			{
+				printf("\nfdc go nak: no DS_SEL");
+			}
 			fdc_go_nak();
 			continue;
 		}
 		
-		printf("\nDrive selected\n");
-		
-		
+		/* only reply if there is an image mounted in either unit drives */
+		if (d[0]==DID_DE && unit0 == 0)
+		{
+			if (debug >= 2)
+			{
+				printf("\nIgnoring requests for not defined unit 0");
+			}
+			continue;
+		}
+		if (d[0]==DID_FG && unit1 == 0)
+		{
+			if (debug >= 2)
+			{
+				printf("\nIgnoring requests for not defined unit 1");
+			}
+			continue;
+		}
+
 		/*
 		 *	Selected
 		 */
-		 		 
+
+		if (debug >= 2)
+		{
+			printf("\nDrive selected");
+		}
 		fdc_go_ack();
 		
 		while(1)
 		{
 			int len=blk_read(epsp_port,d,1);
 		
-#if DEBUG>1
-		printf("\n--> %02X\n ",*d);
-#endif
+		if (debug >= 2)
+		{
+			printf("\n--> %02X\n ",*d);
+		}
 			if(d[0]==EOT)
 				break;
 
@@ -296,9 +427,10 @@ int main(int argc, char *argv[])
 			 */
 			 
 			fdc_go_ack();
-#if DEBUG>0	
-			printf("\nHeader Ok\n");
-#endif		
+			if (debug >= 2)	
+			{
+				printf("\nHeader Ok");
+			}
 			/*
 			 *	Data block
 			 */
@@ -324,11 +456,12 @@ int main(int argc, char *argv[])
 		 
 			fdc_go_ack();
 		
-#if DEBUG>1		
-			printf("\nGot request ID=%02X DID=%02X SID=%02X, FNC=%02X, SIZ=%02X, D0=%02X, D1=%02X, D2=%02X, ..... \n",
-				(int)r.epsp.fmt, (int)r.epsp.did, (int)r.epsp.sid,(int)r.epsp.fnc,
-				(int)r.epsp.siz, (int)r.data[1], (int)r.data[2], (int)r.data[3]);
-#endif			
+			if (debug >= 2)	
+			{	
+				printf("\nGot request ID=%02X DID=%02X SID=%02X, FNC=%02X, SIZ=%02X, D0=%02X, D1=%02X, D2=%02X, .....",
+					(int)r.epsp.fmt, (int)r.epsp.did, (int)r.epsp.sid,(int)r.epsp.fnc,
+					(int)r.epsp.siz, (int)r.data[1], (int)r.data[2], (int)r.data[3]);
+			}
 			
 			blk_read(epsp_port, d, 1);
 			
@@ -345,52 +478,60 @@ int main(int argc, char *argv[])
 		
 			switch(r.epsp.fnc)
 			{
-				case FDC_RESET:
-#if DEBUG>2
-					printf("Received a FDC_RESET. Execute fdc_cmd_reset\n");
-#endif
+				case FDC_RESET_P:
+					if (debug >= 1)
+					{
+						printf("\nReceived a FDC_RESET_P. Execute fdc_cmd_reset");
+					}
 					fdc_cmd_reset(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_RESET_M:
-#if DEBUG>2
-					printf("Received a FDC_RESET_M. Execute fdc_cmd_reset\n");
-#endif
+					if (debug >= 1)
+					{
+						printf("\nReceived a FDC_RESET_M. Execute fdc_cmd_reset");
+					}
 					fdc_cmd_reset(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_READ:
-#if DEBUG>2
-					printf("Received a FDC_READ. Execute fdc_cmd_read\n");
-#endif
+					if (debug >= 2)
+					{
+						printf("\nReceived a FDC_READ. Execute fdc_cmd_read");
+					}
 					fdc_cmd_read(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_WRITE:
-#if DEBUG>2
-					printf("Received a FDC_WRITE. Execute fdc_cmd_write\n");
-#endif
+					if (debug >= 2)
+					{
+						printf("\nReceived a FDC_WRITE. Execute fdc_cmd_write");
+					}
 					fdc_cmd_write(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_WRITEHST:
-#if DEBUG>2
-					printf("Received a FDC_WRITEHST. Execute fdc_cmd_writehst\n");
-#endif
+					if (debug >= 2)
+					{
+						printf("\nReceived a FDC_WRITEHST. Execute fdc_cmd_writehst");
+					}
 					fdc_cmd_writehst(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_COPY:
-#if DEBUG>2
-					printf("Received a FDC_COPY. Execute fdc_cmd_copy\n");
-#endif
+					if (debug >= 2)
+					{
+						printf("\nReceived a FDC_COPY. Execute fdc_cmd_copy");
+					}
 					fdc_cmd_copy(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				case FDC_FORMAT:
-#if DEBUG>2
-					printf("Received a FDC_FORMAT. Execute fdc_cmd_format\n");
-#endif
+					if (debug >= 2)
+					{
+						printf("\nReceived a FDC_FORMAT. Execute fdc_cmd_format");
+					}
 					fdc_cmd_format(&r.epsp, r.data, r.epsp.siz+1);
 					break;
 				default:
-#if DEBUG>2
-					printf("Received unknown command. Exiting command loop\n");
-#endif
+					if (debug >= 2)
+					{
+						printf("\nReceived unknown command. Exiting command loop");
+					}
 					fdc_go_nak();
 					goto end_command_loop;
 			}

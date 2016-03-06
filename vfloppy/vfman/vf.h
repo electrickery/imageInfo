@@ -8,19 +8,19 @@
  */
 
 /* generic directory information, offset from start of image */
-#define DIRBASE		0x80
-#define DIRINCR		0x20
-#define DIRENTRYSIZE	0x20
-#define DIRENTRYCOUNT	0x40
+#define DIRBASE		0x80	/* 128 byte - starting point dir. in image */
+#define DIRINCR		0x20	/* 32 byte - offset per directory entry	*/
+#define DIRENTRYSIZE	0x20	/* 32 byte - size of a directory entry	*/
+#define DIRENTRYCOUNT	0x40	/* 64 - number of directory entries	*/
 
-#define BLOCKBASE	0x0080
-#define BLOCKSIZE	0x0800
-#define RECSIZE		0x80
-#define RECSPERBLOCK	0x10
-#define MAXRECCOUNT	0x80
-#define MAXBLOCKCOUNT	256
+#define BLOCKBASE	0x0080	/* starting point zeroth block	*/
+#define BLOCKSIZE	0x0800	/* 2 kByte 			*/
+#define RECSIZE		0x80	/* 128 byte			*/
+#define RECSPERBLOCK	0x10	/* 16 - number of records per allocation block */
+#define MAXRECCOUNT	0x80	/* 128 records per directory entry	*/
+#define MAXBLOCKCOUNT	256	/* theoretical maximal number of allocation blocks */
 
-#define DISKSIZE	0x8b 	/* (139 blocks, 278 kByte) */
+#define DISKBLOCKCOUNT	0x8b 	/* 139 all.blocks, 278 kByte - actual disk size */
  
 /* directory entry information, offset from start of dir. entry*/
 #define DIRUSERNO	0   	/* UU byte		*/

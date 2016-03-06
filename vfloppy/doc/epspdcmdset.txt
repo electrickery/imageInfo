@@ -1,0 +1,18 @@
+Epspd command set.
+
+The commands accepted by the epspd utility are a subset of the commands
+implemented by the Epson TF-20 floppy drive unit. This is logic as the 
+PX-4/PX-8 does not use the utility/drive to boot, as the HX-20 does.
+
+The epspd command set:
+
+epspd name     FNC code   epson name
+DS_SEL         0x0E       Select Disk
+FDC_RESET      0x0D/0x0E  System Reset  (both PX-4 and PX-8)
+FDC_READ       0x77       * \
+FDC_WRITE      0x78       *  | not in the incomplete doc I have
+FDC_WRITEHST   0x79       * /
+FDC_COPY       0x7A       Disk all copy
+FDC_FORMAT     0x7C       Disk formatting (FRMAT)
+
+

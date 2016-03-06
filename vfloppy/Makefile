@@ -1,21 +1,19 @@
-SRCS=cmd.c 
-OBJS=$(SRCS:.c=.o)
-CFLAGS=-DDEBUG=3 -Wall
+CFLAGS=-DDEBUG=3
 
-epspd: $(OBJS) 
-	$(CC) $(LDFLAGS) -o epspd $(OBJS)
+epspd : epspd.o cmd.o
+	cc -o epspd epspd.o cmd.o -W
 
-vformat: .c=.o
-	$(CC) $(LDFLAGS) -o vformat .c=.o
+cmd.o : cmd.c fdc.h epsp.h
+	cc -c cmd.c -W
 
-depend: $(SRCS)
-	for i in $(SRCS);do $(CC) -MM $(CPPFLAGS) $$i;done > .depend
+epspd.o : epspd.c fdc.h epsp.h
+	cc -c epspd.c -W
 
 clean:
-	rm -f *.o ; rm -f epspd vformat
+	rm -f *.o ; rm -f epspd
 
 strip:
-	strip epspd ; strip vformat
+	strip epspd ; strip
 
 package:
-	tar cvzf ../vfloppy13.tgz ./Makefile ./README ./gpl.txt ./*.c ./*.h ./*.vfd ./vfrun.sh ./vfman/Makefile ./vfman/*.c ./vfman/*.h ./doc/*
+	tar cvzf ../vfloppy14.tgz ./Makefile ./README ./gpl.txt ./*.c ./*.h ./images/*.vfd ./vfrun.sh ./vfman/Makefile ./vfman/*.c ./vfman/*.h ./doc/*.*

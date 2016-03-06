@@ -2,7 +2,7 @@ SRCS=vf.c
 OBJS=$(SRCS:.c=.o)
 CFLAGS=-DDEBUG=0 -Wall
 
-all: vfread vfwrite
+all: vfread vfwrite vformat
 
 vfread: vfread.o $(OBJS)
 	$(CC) -o vfread vfread.o $(OBJS) $(LDFLAGS)
@@ -10,11 +10,14 @@ vfread: vfread.o $(OBJS)
 vfwrite: vfwrite.o $(OBJS) 
 	$(CC) -o vfwrite vfwrite.o $(OBJS) $(LDFLAGS)
 
+vformat: vformat.o $(OBJS)
+	$(CC) -o vformat vformat.o $(OBJS) $(LDFLAGS)
+
 depend: $(SRCS)
 	for i in $(SRCS);do $(CC) -MM $(CPPFLAGS) $$i;done > .depend
 
 clean:
-	rm -f *.o vfread vfwrite
+	rm -f *.o vfread vfwrite vformat
 
 strip:
-	strip vfread ; strip vfwrite
+	strip vfread ; strip vfwrite ; strip vformat

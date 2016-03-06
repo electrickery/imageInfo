@@ -1,11 +1,11 @@
 /*
- * vf.c version 1.0 part of the vfloppy 1.3 package
+ * vf.c version 1.0 part of the vfloppy 1.4 package
  *
  * Copyright 2002 by Fred Jan Kraan (fjkraan@xs4all.nl)
  *
  * vf is placed under the GNU General Public License in July 2002.
  *
- *  This file is part of Vfloppy 1.3.
+ *  This file is part of Vfloppy 1.4.
  *
  *  Vfloppy is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -360,7 +360,7 @@ int findFile(int id, unsigned char *dFName)
 
 int createFile(unsigned char *fileName)
 {
-	int i, fd, blockSize;
+	int i, fd, currentBlockSize;
 	long unsigned int blkAddr;
 
 	/*
@@ -409,16 +409,16 @@ int createFile(unsigned char *fileName)
 	
 		if (blockList[i + 1] == '\0')
 		{
-			blockSize = (lastRecCnt % RECSPERBLOCK) * RECSIZE;
-			if (blockSize == '\0' && lastRecCnt != '\0')
-				blockSize = RECSPERBLOCK;
+			currentBlockSize = (lastRecCnt % RECSPERBLOCK) * RECSIZE;
+			if (currentBlockSize == '\0' && lastRecCnt != '\0')
+				currentBlockSize = RECSPERBLOCK;
 			if (debug>1)
 				printf("\nLast block records: %d\n", lastRecCnt); 
 		} else {
-			blockSize = BLOCKSIZE;
+			currentBlockSize = BLOCKSIZE;
 		}
-		blockRead(imd, data, blkAddr, blockSize); 
-		write(fd, data, blockSize); 
+		blockRead(imd, data, blkAddr, currentBlockSize); 
+		write(fd, data, currentBlockSize); 
 	}
 	if (debug>1)
 		printf("\n");
@@ -568,13 +568,13 @@ void getFreeBlockList(int id)
 
 	int i, j, err;
 	unsigned char tmpBlk;
-	unsigned char allBlockList[DISKSIZE];
+	unsigned char allBlockList[DISKBLOCKCOUNT];
 	unsigned long dirEntry;
 
 	memset(&blockList[0], 0x0, MAXBLOCKCOUNT);
 
 	allBlockList[0] = 0;  /* block zero always used by directory */
-	for (i = 0; i < DISKSIZE; i++)
+	for (i = 0; i < DISKBLOCKCOUNT; i++)
 	{
 		allBlockList[i] = i;
 	}
@@ -593,7 +593,7 @@ void getFreeBlockList(int id)
 		}
 	}
 	j = 0;
-	for (i = 0; i < DISKSIZE; i++)
+	for (i = 0; i < DISKBLOCKCOUNT; i++)
 	{
 
 		if (debug>2)
@@ -665,7 +665,8 @@ void writeDir(int id, char *dFn, char *fn)
 		tmpDirEntry[DIRENTRYNOFIELD] = (i * 2) + lastEntry;
 		if (lastEntry == 0)
 		{
-			tmpDirEntry[DIRRECS] = fileRecCnt % RECSIZE;
+/*			tmpDirEntry[DIRRECS] = fileRecCnt % RECSIZE; */
+			tmpDirEntry[DIRRECS] = fileRecCnt;
 		} else {
 			tmpDirEntry[DIRRECS] = MAXRECCOUNT;
 		}
@@ -678,7 +679,7 @@ void writeDir(int id, char *dFn, char *fn)
 
 int writeBlocks(char *fileName)
 {
-	int fd, i, blockSize, err;
+	int fd, i, currentBlockSize, err;
 	unsigned long blkAddr;
 
         fd = open(fileName, O_RDONLY);
@@ -703,20 +704,20 @@ int writeBlocks(char *fileName)
 
                 if (blockList[i + 1] == '\0')
                 {
-                        blockSize = fileSize % BLOCKSIZE;
+                        currentBlockSize = fileSize % BLOCKSIZE;
 			if (debug>2)
-                        	printf("Last block size: %d\n", blockSize);
+                        	printf("Last block size: %d\n", currentBlockSize);
 			memset(&data[0], 0x0, BLOCKSIZE);
                 } else {
-                        blockSize = BLOCKSIZE;
+                        currentBlockSize = BLOCKSIZE;
                 }
-		err = read(fd, data, blockSize);
+		err = read(fd, data, currentBlockSize);
 		if (err == -1)
 		{
 			printf("error while reading %s. Exiting...\n", fileName);
 			exit;
 		}
-                blockWrite(imd, data, blkAddr, blockSize);
+                blockWrite(imd, data, blkAddr, currentBlockSize);
         }
 	return 0;
 }

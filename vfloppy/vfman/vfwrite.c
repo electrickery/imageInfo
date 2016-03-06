@@ -1,11 +1,11 @@
 /*
- * vfwrite.c version 1.0 part of the vfloppy 1.3 package
+ * vfwrite.c version 1.0 part of the vfloppy 1.4 package
  *
  * Copyright 2002 by Fred Jan Kraan (fjkraan@xs4all.nl)
  *
  * vfwrite is placed under the GNU General Public License in July 2002.
  *
- *  This file is part of Vfloppy 1.3.
+ *  This file is part of Vfloppy 1.4.
  *
  *  Vfloppy is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  *  You should have received a copy of the GNU General Public License
  *  along with Vfloppy; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
  */
 
 /*
@@ -96,7 +95,7 @@ int main(int argc, char *argv[])
 		oldFileBlks = 0;
 		fileDirEntries = 0;
 	}
-	freeBlocks = DISKSIZE - cntUsedImgBlocks(imd, dirFileName) + oldFileBlks;
+	freeBlocks = DISKBLOCKCOUNT - cntUsedImgBlocks(imd, dirFileName) + oldFileBlks;
 	freeDirEntries = DIRENTRYCOUNT - fileDirEntries;
 		
 	fileSize = checkFileNSize(fileName);

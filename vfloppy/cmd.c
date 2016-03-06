@@ -1,5 +1,5 @@
 /*
- * cmd.c version 1.2 part of the vfloppy 1.2 package
+ * cmd.c version 1.3 part of the vfloppy 1.4 package
  *
  * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends.
  *
@@ -7,7 +7,7 @@
  *
  * vfread is placed under the GNU General Public License in July 2002.
  *
- *  This file is part of Vfloppy 1.2.
+ *  This file is part of Vfloppy 1.4.
  *
  *  Vfloppy is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 /*
  * cmd - functions for epspd.c. Implements execution of the commands.
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -38,7 +39,9 @@
 
 extern int epsp_port;
 extern int drive_fd[4];
-
+extern int debug;
+extern int unit0;
+extern int unit1;
 
 void show_dir_entry(unsigned char *block)
 {
@@ -47,9 +50,9 @@ void show_dir_entry(unsigned char *block)
 	int size,part;
 	for (offset=0; offset<128; offset+=32)
 	{
-		printf("%d: ",offset/32);
+		printf("\n%d: ",offset/32);
 		if (block[offset]==0xe5) 
-			printf("No File\n");
+			printf("No File");
 		else
 		{
 			memcpy(&filename[0],&block[offset+1],8);
@@ -63,7 +66,6 @@ void show_dir_entry(unsigned char *block)
 			printf("part %d of %d",part, (size/(16*8))+1);
 			if (block[offset+13]!=0 || block[offset+14]!=0)
 				printf("  ** Corrupt Directory Entry **");
-			printf("\n");
 		}
 	}
 }
@@ -72,18 +74,20 @@ void fdc_go_ack()
 {
 	char dp=ACK;
 	write(epsp_port, &dp, 1);	
-#if DEBUG>1
-	printf("Sent ACK\n");
-#endif
+        if (debug >= 2)
+	{
+		printf("\nSent ACK");
+	}
 }
 
 void fdc_go_nak()
 {
 	char dp=NAK;
 	write(epsp_port, &dp, 1);	
-#if DEBUG>1
-	printf("Sent NAK\n");
-#endif
+        if (debug >= 2)
+	{
+		printf("\nSent NAK");
+	}
 }
 
 
@@ -98,15 +102,17 @@ unsigned char checksum(unsigned char *bp, int len)
 int log_write(int fd, unsigned char *data, int len)
 {
 	int ct;
-#if DEBUG>1
-	printf("\nc>");
-	for(ct=0;ct<len;ct++)
-		printf("%02X ",data[ct]);
-#endif
+        if (debug >= 2)
+	{
+		printf("\nc>");
+		for(ct=0;ct<len;ct++)
+			printf("%02X ",data[ct]);
+	}
 	return write(fd,data,len);
-#if DEBUG>1
-        printf("\n");
-#endif
+        if (debug >= 2)
+	{
+        	printf("\n");
+	}
 }
 
 static void send_epsp(struct epsp_msg *r)
@@ -118,11 +124,12 @@ static void send_epsp(struct epsp_msg *r)
 	 */
 
 	r->epsp.head=0x01;
-#if DEBUG>1
-	printf("Send EPSP %02X %02X %02X %02X %02X %02X\n",
-		r->epsp.fmt,r->epsp.did,r->epsp.sid, r->epsp.fnc,
-		r->epsp.siz, r->data[0]);
-#endif
+        if (debug >= 2)
+	{
+		printf("\nSend EPSP %02X %02X %02X %02X %02X %02X",
+			r->epsp.fmt,r->epsp.did,r->epsp.sid, r->epsp.fnc,
+			r->epsp.siz, r->data[0]);
+	}
 	if(log_write(epsp_port, (unsigned char *)r, 6)==-1)
 		perror("epspd: write error");
 	d[0]=checksum((unsigned char *)&r->epsp, 6);
@@ -137,26 +144,29 @@ static void send_epsp(struct epsp_msg *r)
 	
 	if(d[0]==NAK)
 	{
-#if DEBUG>1
-		printf("\nNAKkered\n");
-#endif
+        	if (debug >= 1)
+		{
+			printf("\nNAKkered\n");
+		}
 		return;
 	}
 	
 	if(d[0]==0x05)
 	{
-#if DEBUG>1
-		printf("\nReceived ENQ\n");
-#endif
+        	if (debug >= 2)
+		{
+			printf("\nReceived ENQ");
+		}
 		fdc_go_ack();
 		return;
 	}
 	
 	if(d[0]!=ACK)
 	{
-#if DEBUG>1
-		printf("\nReceived no ACK but %02X\n", d[0]);
-#endif
+        	if (debug >= 1)
+		{
+			printf("\nReceived no ACK but %02X", d[0]);
+		}
 		return;
 	}
 	
@@ -184,26 +194,30 @@ static void send_epsp(struct epsp_msg *r)
 	
 	if(d[0]==NAK)
 	{
-#if DEBUG>1
-		printf("\nNAKkered\n");
-#endif
+        	if (debug >= 2)
+		{
+			printf("\nNAKkered");
+		}
 		return;
 	}
 	
 	if(d[0]==ENQ)
 	{
-#if DEBUG>1
-		printf("\nENQ\n");
-#endif
+
+        	if (debug >= 2)
+		{
+			printf("\nENQ");
+		}
 		fdc_go_ack();
 		return;
 	}
 	
 	if(d[0]!=ACK)
 	{
-#if DEBUG>1
-		printf("\nReceived no ACK but %02X\n", d[0]);
-#endif
+        	if (debug >= 2)
+		{
+			printf("\nReceived no ACK but %02X", d[0]);
+		}
 		return;
 	}
 	
@@ -214,16 +228,20 @@ static void send_epsp(struct epsp_msg *r)
 	
 	d[0]=EOT;
 	log_write(epsp_port,d,1);
-#if DEBUG>1
-	printf("\n");
-#endif
+	if (debug >= 2)
+	{
+		printf("\n");
+	}
 }
 
 #define ADJUST 4
 
 static int BLOCK_MAP(int a,int b)
 {
-	printf("BLOCK_MAP: Track %d Sector %d == 0x%lX\n",a,b,(((a-0)*64L)+b)*128L);
+	if (debug >= 2)
+	{
+		printf("\nBLOCK_MAP: Track %d Sector %d == 0x%lX\n",a,b,(((a-0)*64L)+b)*128L);
+	}
 	return((((a-ADJUST)*64L)+b)*128L);
 }
 
@@ -236,12 +254,19 @@ static int block_read(int fd, unsigned char *data, unsigned long block, int len)
 		return -1;
 	}
 	err=read(fd,data,len);
-#if DEBUG>0
-printf("DISK: %d READ: pos=0x%lX len=%d\n", fd, block, len);
+	if (debug >= 2)
+	{
+		printf("DISK: %d READ: pos=0x%lX len=%d\n", fd, block, len);
+	}
 	if (block>(0x2000*(4-ADJUST)) && block < (0x2000*((4-ADJUST)+2)))
+	{
+		if (debug >= 2)
+		{
 			show_dir_entry(data);
-	return err;
-#endif
+		}
+		return err;
+	}
+return err;
 }
 
 static int block_write(int fd, unsigned char *data, unsigned long block, int len)
@@ -253,14 +278,19 @@ static int block_write(int fd, unsigned char *data, unsigned long block, int len
 		return -1;
 	}
 	err=log_write(fd,data,len);
-#if DEBUG>0
-printf("DISK: %d WRITE: pos=0x%lX len=%d\n", fd, block, len);
-	if (block>(0x2000*(4-ADJUST)) && block < (0x2000*((4-ADJUST)+2)))
-			show_dir_entry(data);
-	return err;
-#endif
-}
+	if (debug >= 2)
+		printf("DISK: %d WRITE: pos=0x%lX len=%d\n", fd, block, len);
 
+	if (block>(0x2000*(4-ADJUST)) && block < (0x2000*((4-ADJUST)+2)))
+	{
+		if (debug >= 2)
+		{
+			show_dir_entry(data);
+		}
+		return err;
+	}
+return err;
+}
 
 static int drive_of(unsigned char a, unsigned char b)
 {
@@ -288,7 +318,7 @@ static int drive_of(unsigned char a, unsigned char b)
 
 /* struct epsp *s       = the message from the PX, used to create return message header
    unsigned char *bytes = contains track and sector data. data[256]
-   int len              = ignored, suppost to be always 128
+   int len              = ignored, supposed to be always 128
  */
 void fdc_cmd_reset(struct epsp *s, unsigned char *bytes,int len)
 {
@@ -408,4 +438,3 @@ void fdc_cmd_format(struct epsp *s, unsigned char *bytes, int len)
 	reply.epsp.fnc=s->fnc;
 	send_epsp(&reply);
 }	
-

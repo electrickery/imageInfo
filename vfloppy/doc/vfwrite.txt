@@ -1,0 +1,18 @@
+Vfwrite writes a file to a vfloppy image.
+
+usage: vfwrite <imageName> [<fileName>]
+
+After checking the image is mounted properly, the file name is 
+looked up in the image and if found the size is added to the
+free space. If the total is larger than the new file size,
+the image file is deleted and the new file is written to the
+image. The number of free directory entries is checked too, but
+this will not be an problem often. The image supports 64 entries
+(each 16 kByte part of a file is an entry).
+
+The specified file name can be upper of lower case, it is converted
+CP/M standard upper case. The total length is truncated to eleven
+characters (excluding an optional dot), and the extension (what's
+behind the dot) to three. I did some testing on this part.
+
+Fred Jan Kraan, 2002-08-19

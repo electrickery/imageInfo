@@ -1,5 +1,5 @@
 /*
- * fdc.h version 1.2 part of the vfloppy 1.2 package
+ * fdc.h version 1.2 part of the vfloppy 1.4 package
  *
  * Copyright 1996 Justin Mitchell (madmitch@discordia.org.uk) and friends.
  *
@@ -7,7 +7,7 @@
  *
  * vfread is placed under the GNU General Public License in July 2002.
  *
- *  This file is part of Vfloppy 1.2.
+ *  This file is part of Vfloppy 1.4.
  *
  *  Vfloppy is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
  *
  */
  
-#define FDC_RESET	0x0D
+#define FDC_RESET_P	0x0D
 #define FDC_RESET_M	0x0E
 
 #define FDC_READ	0x77

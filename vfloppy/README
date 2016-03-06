@@ -10,17 +10,20 @@ Files with version number 1.1 are (slightly) modified.
 Executables compiled with SuSE Linux 7.1 kernel 2.4.10-4GB 
 
 Version 1.2 is delivered by Fred Jan Kraan in July 2002 and adds
-a utility to read the images from Linux, vfread. An accompanying
+an utility to read the images from Linux, vfread. An accompanying
 vfwrite is planned for 1.3 or later.
 
-Fred Jan Kraan, 2002-07-10
+Version 1.3 is delivered by Fred Jan Kraan somewhere in 2002 and
+adds an utility to write the images from Linux, vfwrite.
+
+Version 1.4 is delivered by Fred Jan Kraan in 2003 and
+has a restructured command line interface, allowing specification
+of arbitrary drive combinations and debug level. 
+
+Fred Jan Kraan, 2003-11-24
 fjkraan@xs4all.nl
 
 Some comment on the non-obvious files:
-disk.0       - the disk.x files are example disk images
-disk.1          used by the vfrun.sh run example file
-disk.2
-disk.3
 px4util.dsk  - a disk with the contents of the PX-4 UTL ROM
 px8games.dsk - four games for the PX-8 as found on ftp.epson-usa.com
 px8util.dsk  - a disk with the contents of the PX-8 UTL ROM
