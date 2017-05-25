@@ -28,7 +28,10 @@
    <p>Versions:
    <ul>
        <li><a href="FDDExer01.ino">Version 0.1</a> first version. 
+       <li><a href="FDDExer02.ino">Version 0.2</a> added trackCount, head move patterns and rpm measurement. 
    </ul>
+
+   <p>Also at <a href="https://github.com/electrickery/nonSound-vintage/tree/master/FDDExer">GitHub</a>.
 
    <p>No documentation yet, but the pin-layout is in the source, and the floppy connector is a standard.
 
@@ -39,11 +42,16 @@ DS[01], Drive Select on or off
 Hx[01], Head Load off or on
 I       List input signals and current track
 M[01],  Motor off or on
+P[01],  Head movement patterns; 0 = Track00 to trackCount and back, 1 = random between Track00 and trackCount.*
 R,      Reset all signals (to 1)
-SKnn,   Seek track (always two decimal digits)
+SKnn,   Seek track (always two decimal digits)*
+SR,     Measures the rotation speed in RPM*
 SS[01], Side Select 0 or 1
 STnn,   Execute steps (always two decimal digits)
+Tnn,    Number of tracks (always two decimal digits). Default is 35.
 ?       Short help
+
+*) these commands start and stop the drive (DS0 & M0 resp. DS1 M1).
 </pre>
    
    <p>The FDDexer Arduino sketch is released under the 3-clause BSD license. So instead of asking me to add a

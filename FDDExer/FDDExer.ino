@@ -1,5 +1,7 @@
 // Experimental Flexible Disk Drive Exerciser
 // fjkraan@xs4all.nl, 2017-05-25
+// This software is released under the 3-clause BSD license
+
 
 #define SERIALBUFSIZE         11
 unsigned long previousMillis = 0;
@@ -38,6 +40,7 @@ bool wdState;
 bool wgState;
 bool ssState;
 byte track;
+byte trackCount;
 
 void setup() {
     pinMode(LED, OUTPUT); 
@@ -46,17 +49,17 @@ void setup() {
     delay(500);
     digitalWrite(LED, LOW);
     delay(500);
-    Serial.println("FDD Exerciser 0.1.0");
+    Serial.println("FDD Exerciser 0.2.0");
     digitalWrite(LED, HIGH);
     delay(500);
     digitalWrite(LED, LOW);
     delay(500);
     track = 255;
+    trackCount = 35;
     pinConfig();
 }
 
 void loop() {
-
     commandCollector();
     digitalWrite(LED, !digitalRead(INDEX));
 }
@@ -141,6 +144,10 @@ void commandInterpreter() {
     case 'm':
       mArgInterpreter();
       break;
+    case 'P':
+    case 'p':
+      pArgInterpreter();
+      break;
     case 'R':
     case 'r':
       rArgInterpreter();
@@ -148,6 +155,10 @@ void commandInterpreter() {
     case 'S':
     case 's':
       sArgInterpreter();
+      break;
+    case 'T':
+    case 't':
+      tArgInterpreter();
       break;
     default:
       Serial.print(bufByte);
@@ -256,6 +267,20 @@ void mArgInterpreter() {
     }
 }
 
+void pArgInterpreter() {
+    if (setBufPointer == 2) {
+        if (serialBuffer[1] == '0') {
+            runUpDownPattern();
+        } else if (serialBuffer[1] == '1') {
+            runRandomPattern();
+        }
+    } else {
+        Serial.print("P ");
+        Serial.print("unsupported arg size: ");
+        Serial.println(setBufPointer);
+    }
+}
+
 void rArgInterpreter() {
     if (setBufPointer == 1) {
         Serial.println("R");
@@ -277,6 +302,9 @@ void sArgInterpreter() {
     } else if ((setBufPointer == 2 || setBufPointer == 3) && 
         (serialBuffer[1] == 'S' || serialBuffer[1] == 's')) {
         ssArgInterpreter();
+    } else if ((setBufPointer == 2) && 
+        (serialBuffer[1] == 'R' || serialBuffer[1] == 'r')) {
+        srArgInterpreter();
     } else if ((setBufPointer == 2 || setBufPointer == 4) && 
         (serialBuffer[1] == 'K' || serialBuffer[1] == 'k')) {
         skArgInterpreter();
@@ -304,7 +332,7 @@ void stArgInterpreter() {
 }
 
 void ssArgInterpreter() {
-     if (setBufPointer == 2) {
+    if (setBufPointer == 2) {
         Serial.print("SS");
         Serial.println(ssState, DEC);
     } else if (setBufPointer == 3) {
@@ -319,32 +347,51 @@ void ssArgInterpreter() {
     }
 }
 
+void srArgInterpreter() {
+    driveOn();
+    unsigned int highTime;
+    unsigned int lowTime;
+    lowTime  = pulseIn(INDEX, LOW);
+    highTime = pulseIn(INDEX, HIGH);
+    double revolutionTime = lowTime + highTime;
+    double rpm = 60000000.0/revolutionTime;
+    Serial.print("SR ");
+    Serial.print(" ");
+    Serial.print(rpm, 2);
+    Serial.println(" rpm");
+    driveOff();
+}
+
 void skArgInterpreter() {
      if (setBufPointer == 2) {
           Serial.print("SK");
           Serial.println(track, DEC);
      } else if (setBufPointer == 4) {
+          driveOn();
           byte wantedTrack = digits2Value(serialBuffer[2], serialBuffer[3]);
-          if (digitalRead(TRACK00) == 0) track = 0;
-          if (track == 255) {
-            gotoTrack0();
-            track = 0;
-          }
-          int steps = track - wantedTrack;
-          if (steps < 0) {
-              steps = -steps;
-              digitalWrite(DIRECTION, 0);
-          } else {
-              digitalWrite(DIRECTION, 1);
-          }
-          makeSteps(steps);
-          track = wantedTrack;
+          seekTrack(wantedTrack);
           Serial.print("SK");
           Serial.println(track, DEC);
+          driveOff();
      } else {
           Serial.print("SK ");
           Serial.print("unsupported arg size: ");
           Serial.println(setBufPointer);
+    }
+}
+
+void tArgInterpreter() {
+    if (setBufPointer == 1) { 
+        Serial.print("T ");
+        Serial.println(trackCount, DEC);
+    } else if (setBufPointer == 3) {
+        trackCount = digits2Value(serialBuffer[1], serialBuffer[2]);
+        Serial.print("T ");
+        Serial.println(trackCount, DEC);
+    } else {
+        Serial.print("T ");
+        Serial.print("unsupported arg size: ");
+        Serial.println(setBufPointer);     
     }
 }
 
@@ -384,5 +431,62 @@ void gotoTrack0() {
     while (digitalRead(TRACK00) != 0) {
         makeSteps(1);
     }
+}
+
+void runUpDownPattern() {
+    bool keyPress = 1;
+    if (digitalRead(TRACK00) == 0) track = 0;
+    while (keyPress) {
+        gotoTrack0();
+        Serial.println("P0 0");
+        seekTrack(trackCount);
+        Serial.print("P0 ");
+        Serial.println(track, DEC);
+        if (Serial.available() > 0) keyPress = 0;
+    }
+}
+
+void runRandomPattern() {
+    bool keyPress = 1;
+    if (digitalRead(TRACK00) == 0) track = 0;
+    if (track == 255) {
+        gotoTrack0();
+        track = 0;
+    }
+    while(keyPress) {
+        int randomTrack = random(trackCount);
+        seekTrack(randomTrack);
+        Serial.print("P1 ");
+        Serial.println(track, DEC);        
+        if (Serial.available() > 0) keyPress = 0;
+    } 
+}
+
+void seekTrack(byte wantedTrack) {
+          if (digitalRead(TRACK00) == 0) track = 0;
+          if (track == 255) {
+              gotoTrack0();
+              track = 0;
+          }
+          int steps = track - wantedTrack;
+          if (steps < 0) {
+              steps = -steps;
+              digitalWrite(DIRECTION, 0);
+          } else {
+              digitalWrite(DIRECTION, 1);
+          }
+          makeSteps(steps);
+          track = wantedTrack;
+}
+
+void driveOn() {
+    digitalWrite(DRIVESEL, LOW);
+    digitalWrite(MOTOR, LOW);
+    delay(1000);
+}
+
+void driveOff() {
+    digitalWrite(DRIVESEL, HIGH);
+    digitalWrite(MOTOR, HIGH);
 }
 
