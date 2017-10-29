@@ -19,6 +19,7 @@ A ODT tool that makes entering programs somewhat simpler. It takes a file in the
 000232/000240
 000234/000761
 </pre>
+Empty lines and lines starting with a '#' are ignored. On dump lines, a trailing comment is also ignored, as long as it is preceded by a #.
 
 <h2>p11Disas.pl</h2>
 
