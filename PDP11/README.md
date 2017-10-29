@@ -22,5 +22,19 @@ A ODT tool that makes entering programs somewhat simpler. It takes a file in the
 
 <h2>p11Disas.pl</h2>
 
-An early attempt to make a disassembler for PDP-11 programs. It uses the ODT-dump format as input. It isn't very fancy, but it was surprisingly easy to make.
+An early attempt to make a disassembler for PDP-11 programs. It uses the ODT-dump format as input. It isn't very fancy, but it was surprisingly easy to make. A disassembly of the dump above looks like:
 
+<pre>MOV 000032, R0
+MOV R0, (R0)
+TST (R0)+
+CMP (R7)+
+MOV @101773(R5), R0
+CMP R0
+BEQ L000224     ; PC +4
+HALT
+CMP R0
+RTT
+BCS L000216     ; PC -10
+NOP
+BR L000200     ; PC -28
+</pre>
