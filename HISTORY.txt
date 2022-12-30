@@ -1,5 +1,8 @@
 HISTORY.txt
 
+The original repository for imageInfo was https://github.com/electrickery/nonSound-vintage/tree/master/imageInfo
+and here most of the commit history remains.
+
 New in 0.8:
 - implemented check for NewDOS/80 PDRIVE data.
 - fixed a bug corrupting the sector address in some cases.
