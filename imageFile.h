@@ -29,9 +29,5 @@ void closeImage(userParameters_t* tuserParameters);
 void shutdown(userParameters_t* tuserParameters);
 
 
-
-
-
-
 #endif	/* IMAGEFILE_H */
 

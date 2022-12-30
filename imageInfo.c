@@ -500,8 +500,9 @@ int dmkCheck(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
     } else {
         logger(INFO, ", unknown write state: 0x%02X (should be Write Protected (0xFF) or Write Enabled (0x00)) ", writeProtect);
     }
+    char ignDens = dmkImageHeader->options & DMK_IGNORE_DENSITY;
     logger(TRACE, ", %s density (obsolete), ", 
-            ((dmkImageHeader->options & DMK_IGNORE_DENSITY) == 1) ? "Ignore" : "Respect");
+            (ignDens == 1) ? "Ignore" : "Respect");
     logger(TRACE, "SD sector bytes are written %s\n", (singleDensitySingleByte) ? "once" : "twice");
     
     crcCheckErrors = dmkImageParser(imageIndex, dmkImageHeader, tuserParameters);
@@ -886,7 +887,7 @@ void showDirSector(int logLevel, unsigned char *data, int size) {
                 if (directoryEntry->gap4.track == 0xFF) { logger(logLevel, "\n"); continue; }
                 logger(logLevel, "%2d ", directoryEntry->gap4.track);
                 logger(logLevel, "%2d ", directoryEntry->gap4.numberOfGranules);
-                if (!directoryEntry->FXDEflag == 0xFF) {
+                if (directoryEntry->FXDEflag != 0xFF) {
                     logger(logLevel, "%d,", (directoryEntry->FXDEflag & DIR_FXDE_ENTRY_MASK)>>5);
                     logger(logLevel, "%d ", directoryEntry->FXDEflag & DIR_FXDE_SECTOR_MASK);
                     logger(logLevel, "%d ", directoryEntry->FXDElocation);

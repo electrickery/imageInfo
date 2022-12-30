@@ -8,8 +8,6 @@
 #ifndef TRSDOS_H
 #define	TRSDOS_H
 
-
-
 //    from: http://www.classiccmp.org/cpmarchives/trs80/mirrors/kjsl/www.kjsl.com/trs80/mod1ldos.html
 //DIR+0     This byte contains the attributes of the file.
 //

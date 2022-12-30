@@ -5,6 +5,8 @@
  * Created on November 28, 2012, 5:13 PM
  */
 
+#ifndef DMK_H
+#define DMK_H
 
 // Info indirectly from Phil Ereaut:
 //000000:   00       28      00 19       00          00      00      00 00 00 00 00 00 00 00 00
@@ -147,3 +149,5 @@ typedef struct {
 #define DMK_II_256  0x01
 #define DMK_II_512  0x02
 #define DMK_II_1024 0x03
+
+#endif // DMK_H

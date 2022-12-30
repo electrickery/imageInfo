@@ -5,8 +5,8 @@
  * Created on November 20, 2012, 7:06 PM
  */
 
-    
-
+#ifndef IMAGEINFO_H
+#define IMAGEINFO_H
      
 #define MAX_SECTOR_SIZE 1024
 #define TRSDOS_SECTOR_SIZE 256
@@ -52,3 +52,5 @@ void showGAT(int logLevel, unsigned char *data, int size);
 void showHIT(int logLevel, unsigned char *data, int size, int sectorsPerTrackSide);
 void showDirSector(int logLevel, unsigned char *data, int size);
 unsigned char calcHash(char *fileName, int size);
+
+#endif // IMAGEINFO_H

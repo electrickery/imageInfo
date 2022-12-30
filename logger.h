@@ -15,8 +15,8 @@
 #define TRACE 4
 #define BYTES 5
 
-char *out_file_name;
-FILE* out_file;
+//char *out_file_name;
+//FILE* out_file;
 
 void setLogLevel(int level);
 

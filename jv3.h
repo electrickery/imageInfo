@@ -5,6 +5,9 @@
  * Created on November 28, 2012, 5:16 PM
  */
 
+#ifndef JV3_H
+#define JV3_H
+
 // Info indirectly from Phil Ereaut:
 //
 //JV3_DAM value   Single density       Double density
@@ -48,9 +51,6 @@ typedef struct {
   JV3SectorHeader_t headers1[JV3_SECTORS]; // 8703, 0x21FF
   unsigned char writeprot;     //    0xFF is R/W, 0x00 is Write protected
   unsigned char data1[];       //    
-//  JV3SectorHeader headers2[JV3_SECTORS]; // 8703
-//  unsigned char padding;       //    0xFF
-//  unsigned char data2[];       //
 } JV3_t;
 
 // imageInfo internal cross platform struct
@@ -77,4 +77,4 @@ typedef struct {
    long *sectorLocations[JV3_SECTORS];
 } JV3ImageIndex_t;
 
-
+#endif // JV3_H 
