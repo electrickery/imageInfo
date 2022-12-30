@@ -1,17 +1,4 @@
-Yet another image interpreter
-
-This program identifies disk images for TRS-80 Model I, III and 4 machines. Only
-JV1, JV3 and DMK are currently supported. 
-
-Maybe I'll directory reading later.
-
-usage: -d display directory tracks
-       -f <image file>
-       -h              - help and version
-       -s force single sided interpretation
-       -v <log level>  - verbosity (0-4), default 1
-                         0 - ERROR; 1 - WARN; 2 - INFO; 3 - DEBUG; 4 - TRACE; 5 - BYTES 5
-       -?              - help and version
+HISTORY.txt
 
 New in 0.8:
 - implemented check for NewDOS/80 PDRIVE data.
@@ -46,4 +33,4 @@ New in 0.4:
 New in 0.3:
 - improved DMK parsing, but single byte sectors only.	   
 	   
-fjkraan@xs4all.nl, 2012-12-09
+fjkraan@electrickery.nl, 2022-12-30
