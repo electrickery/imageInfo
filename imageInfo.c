@@ -290,17 +290,18 @@ int jv1Check(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
     SectorDescriptor_t sp;
     SectorDescriptor_t *sectorParams = &sp;
     
-    if (size == JV1_SSSD35_SIZE) {
+    if (size > JV1_SSSD35_SIZE - JV1_FUZZ || size < JV1_SSSD35_SIZE + JV1_FUZZ) {
         logger(INFO, " Size is correct for a 35 tracks, 10 sectors of 256 bytes JV1 image\n");
         maxTrack = 35;
-    } else if (size == JV1_SSSD40_SIZE) {
+    } else if (size > JV1_SSSD40_SIZE - JV1_FUZZ || size < JV1_SSSD40_SIZE + JV1_FUZZ) {
         logger(INFO, " Size is correct for a 40 tracks, 10 sectors of 256 bytes JV1 image\n");
         maxTrack = 40;
-    } else if (size == JV1_SSSD80_SIZE) {
+    } else if (size > JV1_SSSD80_SIZE - JV1_FUZZ || size < JV1_SSSD80_SIZE + JV1_FUZZ) {
         maxTrack = 80;
         logger(INFO, " Size is correct for a 80 tracks, 10 sectors of 256 bytes JV1 image\n");
     } else {
-        logger(INFO," Size of %d bytes does not match a standard JV1 image\n", size);
+        logger(INFO," Size of %d bytes does not match a standard JV1 image (%d, %d or %d)\n", 
+        size, JV1_SSSD35_SIZE, JV1_SSSD40_SIZE, JV1_SSSD80_SIZE);
         return 0;
     }
     
@@ -490,7 +491,7 @@ int dmkCheck(userParameters_t *tuserParameters, SectorDescriptor_t *imageIndex) 
         logger(DEBUG, "unknown DMK type, trackLength: 0x%04X.\n", trackLength);
         return 0; // No reason to continue.
     }
-//    logger(WARN, "Image is a DMK image\n");
+    logger(WARN, "Image is a DMK image\n");
     logger(DEBUG, " (0x%04X), ", trackLength);
     logger(DEBUG, "%s Sided, ", (dmkImageHeader->options & DMK_SINGLE_SIDED_ONLY) ? "Single" : "Double" );
     if (writeProtect == 0xFF) {
@@ -887,7 +888,7 @@ void showDirSector(int logLevel, unsigned char *data, int size) {
                 if (directoryEntry->gap4.track == 0xFF) { logger(logLevel, "\n"); continue; }
                 logger(logLevel, "%2d ", directoryEntry->gap4.track);
                 logger(logLevel, "%2d ", directoryEntry->gap4.numberOfGranules);
-                if (directoryEntry->FXDEflag != 0xFF) {
+                if (directoryEntry->FXDEflag == 0xFF) {
                     logger(logLevel, "%d,", (directoryEntry->FXDEflag & DIR_FXDE_ENTRY_MASK)>>5);
                     logger(logLevel, "%d ", directoryEntry->FXDEflag & DIR_FXDE_SECTOR_MASK);
                     logger(logLevel, "%d ", directoryEntry->FXDElocation);

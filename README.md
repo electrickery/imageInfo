@@ -3,7 +3,7 @@
 This program is incomplete.
 
 The program identifies disk images for TRS-80 Model I, III and 4 machines. Only
-formats JV1, JV3 and DMK are currently supported. On OS level it knows TRSDOS, LDOS and NEWDOS/80
+formats JV1, JV3 and DMK are currently supported. On OS level it knows TRSDOS, LDOS and NEWDOS/80/86/90
 formatted disks. If a know image format is identified but no known format is identified, an 
 HEX/ASCII dump of the boot sector is printed.
 

@@ -17,7 +17,7 @@
 #define JV1_SSSD40_SIZE TRSDOS_SS_SD_SPT * TRSDOS_SECTOR_SIZE * 40
 #define JV1_SSSD80_SIZE TRSDOS_SS_SD_SPT * TRSDOS_SECTOR_SIZE * 80
 #define JV1_SSSD80_SECTORS TRSDOS_SS_SD_SPT * 80
-
+#define JV1_FUZZ 2048
 
 void optionParse(int argc, char** argv, userParameters_t *tuserParameters);
 void usage(userParameters_t *tuserParameters);
