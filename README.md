@@ -1,4 +1,4 @@
-# Yet another image interpreter
+# Yet another disk image interpreter
 
 This program is incomplete.
 
